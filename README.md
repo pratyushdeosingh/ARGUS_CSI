@@ -226,3 +226,12 @@ The prototype is complete when:
 - the complete demo runs locally from documented setup.
 
 See [`docs/team-start-here.md`](docs/team-start-here.md) for the immediate team checklist.
+
+## Current implementation status
+
+- Shared contracts and canonical fixtures: complete
+- ARGUS FastAPI mock orchestration: complete
+- Correlation and human-approval flow: complete
+- Pratyush SOC dashboard milestone: complete on `pratyush/orchestration-dashboard`
+- Pratham graph detector: assigned/in progress
+- Nitin eBPF detector: assigned/in progress
