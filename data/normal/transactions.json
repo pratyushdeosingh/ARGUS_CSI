@@ -1,0 +1,24 @@
+[
+  {
+    "transaction_id": "TX-0001",
+    "timestamp": "2026-08-17T15:20:00Z",
+    "source_account": "ACC-101",
+    "destination_account": "ACC-050",
+    "amount": 1250,
+    "currency": "INR",
+    "device_id": "DEV-01",
+    "ip_address": "203.0.113.10",
+    "status": "completed"
+  },
+  {
+    "transaction_id": "TX-0002",
+    "timestamp": "2026-08-17T15:23:00Z",
+    "source_account": "ACC-700",
+    "destination_account": "ACC-701",
+    "amount": 900,
+    "currency": "INR",
+    "device_id": "DEV-70",
+    "ip_address": "203.0.113.70",
+    "status": "completed"
+  }
+]

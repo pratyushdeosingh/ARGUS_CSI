@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://argus.local/schemas/transaction.schema.json",
+  "title": "Transaction",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "transaction_id",
+    "timestamp",
+    "source_account",
+    "destination_account",
+    "amount",
+    "currency",
+    "device_id",
+    "ip_address",
+    "status"
+  ],
+  "properties": {
+    "transaction_id": { "type": "string" },
+    "timestamp": { "type": "string", "format": "date-time" },
+    "source_account": { "type": "string" },
+    "destination_account": { "type": "string" },
+    "amount": { "type": "number", "exclusiveMinimum": 0 },
+    "currency": { "type": "string" },
+    "device_id": { "type": "string" },
+    "ip_address": { "type": "string" },
+    "status": {
+      "type": "string",
+      "enum": ["pending", "completed", "cancelled"]
+    }
+  }
+}

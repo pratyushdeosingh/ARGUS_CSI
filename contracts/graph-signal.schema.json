@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://argus.local/schemas/graph-signal.schema.json",
+  "title": "GraphSignal",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "signal_id",
+    "source",
+    "timestamp",
+    "risk_score",
+    "anomaly_type",
+    "suspicious_accounts",
+    "suspicious_transactions",
+    "related_ips",
+    "reasons"
+  ],
+  "properties": {
+    "signal_id": { "type": "string" },
+    "source": { "const": "graph_detector" },
+    "timestamp": { "type": "string", "format": "date-time" },
+    "risk_score": { "type": "number", "minimum": 0, "maximum": 1 },
+    "anomaly_type": { "type": "string" },
+    "suspicious_accounts": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "suspicious_transactions": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "related_ips": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "reasons": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  }
+}

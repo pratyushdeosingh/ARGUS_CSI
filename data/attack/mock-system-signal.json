@@ -1,0 +1,16 @@
+{
+  "signal_id": "EBPF-001",
+  "source": "ebpf_detector",
+  "timestamp": "2026-08-17T15:31:18Z",
+  "risk_score": 0.87,
+  "host": "payment-node-01",
+  "service": "payment-api",
+  "process": "payment-worker",
+  "event_type": "suspicious_process_and_network_activity",
+  "related_ips": ["185.220.101.10"],
+  "indicators": [
+    "Unexpected child process",
+    "Sensitive configuration file accessed",
+    "Connection to suspicious external IP"
+  ]
+}

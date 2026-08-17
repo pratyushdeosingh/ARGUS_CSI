@@ -1,0 +1,15 @@
+{
+  "signal_id": "GRAPH-001",
+  "source": "graph_detector",
+  "timestamp": "2026-08-17T15:31:15Z",
+  "risk_score": 0.92,
+  "anomaly_type": "rapid_mule_fund_movement",
+  "suspicious_accounts": ["ACC-101", "ACC-202", "ACC-303", "ACC-404"],
+  "suspicious_transactions": ["TX-1001", "TX-1002", "TX-1003"],
+  "related_ips": ["185.220.101.10"],
+  "reasons": [
+    "New device and IP for the originating account",
+    "Rapid movement through multiple accounts",
+    "Previously unseen beneficiary relationships"
+  ]
+}
