@@ -6,6 +6,7 @@ JSON Schemas in ``contracts/`` remain the language-neutral source of truth.
 
 from datetime import datetime
 from enum import Enum
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -47,7 +48,7 @@ class Transaction(StrictModel):
 
 class GraphSignal(StrictModel):
     signal_id: str
-    source: str = "graph_detector"
+    source: Literal["graph_detector"] = "graph_detector"
     timestamp: datetime
     risk_score: float = Field(ge=0, le=1)
     anomaly_type: str
@@ -59,7 +60,7 @@ class GraphSignal(StrictModel):
 
 class SystemSignal(StrictModel):
     signal_id: str
-    source: str = "ebpf_detector"
+    source: Literal["ebpf_detector"] = "ebpf_detector"
     timestamp: datetime
     risk_score: float = Field(ge=0, le=1)
     host: str
@@ -103,3 +104,15 @@ class AuditEvent(StrictModel):
     target: str
     actor: str
     result: str
+
+
+class DetectorComponentStatus(StrictModel):
+    availability: Literal["online", "degraded", "offline"]
+    origin: Literal["service", "last_known", "fixture", "none"]
+    mode: Literal["live", "replay", "fixture", "unknown"] = "unknown"
+    detail: str
+
+
+class DetectorStatus(StrictModel):
+    graph: DetectorComponentStatus
+    system: DetectorComponentStatus

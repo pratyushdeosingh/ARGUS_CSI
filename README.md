@@ -6,6 +6,28 @@ ARGUS correlates both signals, explains the incident, recommends containment, an
 
 > This project uses synthetic data and simulated response actions. It is not a real banking system and must not be connected to real financial accounts.
 
+## Project status
+
+Last verified: **21 August 2026** on branch
+`pratyush/orchestration-dashboard`.
+
+| Component | Owner | Status | Latest capability |
+|---|---|---|---|
+| Shared contracts and fixtures | Team | Complete | Strict transaction, graph, system-signal, and incident schemas with canonical normal/attack data |
+| ARGUS orchestration API | Pratyush | Complete | Simulation, strict signal validation, correlation, policy, human approval, audit trail, and detector status API |
+| SOC dashboard | Pratyush | Complete | Staged attack story, Cytoscape graph, evidence panels, service provenance, fallback warnings, containment, and audit UI |
+| Detector integration layer | Pratyush | Complete | Concurrent HTTP adapters, timeouts, `auto`/`fixture`/`required` modes, last-known caching, and controlled fallbacks |
+| Financial graph detector | Pratham | In progress | Must provide `GET /health` and `POST /analyze` on port `8001` |
+| eBPF/replay detector | Nitin | In progress | Must provide `GET /health`, `POST /simulate`, and `GET /signals/latest` on port `8002` |
+| Full live end-to-end run | Team | Awaiting detectors | ARGUS is ready; final verification begins when both detector services are available |
+
+Current verification results:
+
+- Backend: **10 tests passing**
+- Frontend: **4 tests passing**
+- Frontend TypeScript/Vite production build: **passing**
+- Shared detector JSON contracts: **unchanged**
+
 ## The demo in one minute
 
 1. The dashboard begins in a healthy state.
@@ -74,7 +96,7 @@ services/graph-detector/    Pratham's financial graph detector
 services/ebpf-detector/     Nitin's Linux/eBPF detector
 ```
 
-## Start the existing backend
+## Quick start
 
 Python 3.11 is recommended.
 
@@ -98,20 +120,92 @@ python -m uvicorn backend.app.main:app --reload
 
 Open `http://127.0.0.1:8000/docs` to test the API.
 
+Start the dashboard in a second terminal:
+
+```powershell
+cd frontend
+pnpm install
+pnpm dev
+```
+
+Open `http://127.0.0.1:5173`. The frontend calls
+`http://127.0.0.1:8000` by default.
+
 Important endpoints:
 
 - `GET /health`
 - `GET /api/demo/normal`
 - `POST /api/demo/simulate-attack`
+- `GET /api/detectors/status`
 - `POST /api/signals/correlate`
 - `POST /api/incidents/INC-001/approve`
 - `GET /api/audit`
 
-Run tests from the repository root:
+### Verification commands
+
+Run backend tests from the repository root:
 
 ```bash
 python -m pytest backend/tests
 ```
+
+Run frontend tests and create a production build:
+
+```powershell
+cd frontend
+pnpm test
+pnpm run build
+```
+
+### Detector integration modes
+
+The orchestration service is integration-ready before the detector branches
+land. It calls the documented services on ports `8001` and `8002`, validates
+their responses, and exposes the real signal origin to the dashboard.
+
+Copy `.env.example` values into your shell or `.env` runner configuration.
+Use `ARGUS_DETECTOR_MODE=auto` for normal development, `fixture` for a fully
+offline demonstration, and `required` when verifying teammate services. With
+both services running, execute:
+
+```powershell
+python -m backend.app.integration_check
+```
+
+No detector code needs to be copied into the orchestration branch. After the
+team branches merge, only their service startup commands or Compose definitions
+need to be added.
+
+| Mode | Behavior | Recommended use |
+|---|---|---|
+| `auto` | Uses service responses, then last-known signals, then canonical fixtures | Normal development and resilient demos |
+| `fixture` | Skips detector HTTP calls and always uses canonical fixtures | Fully offline, deterministic presentation |
+| `required` | Returns an integration error instead of using a fallback | Final contract and end-to-end verification |
+
+Detector URLs and timeout are configured with:
+
+```text
+GRAPH_DETECTOR_URL=http://127.0.0.1:8001
+EBPF_DETECTOR_URL=http://127.0.0.1:8002
+DETECTOR_TIMEOUT_SECONDS=2.5
+```
+
+The dashboard never labels a fixture or cached response as a live detector
+connection. Each signal displays its actual origin: service, replay,
+last-known, fixture, or unavailable.
+
+### Integration handoff
+
+When Pratham and Nitin finish their services:
+
+1. Start the graph detector on port `8001` and the eBPF adapter on port `8002`.
+2. Keep the JSON field names exactly aligned with `contracts/`.
+3. Set `ARGUS_DETECTOR_MODE=required`.
+4. Run `python -m backend.app.integration_check`.
+5. Start ARGUS and the dashboard, run the canonical attack, approve containment, and confirm three audit entries.
+
+No dashboard changes should be necessary unless a teammate response violates
+the agreed contract.
 
 ## Git workflow
 
@@ -226,3 +320,9 @@ The prototype is complete when:
 - the complete demo runs locally from documented setup.
 
 See [`docs/team-start-here.md`](docs/team-start-here.md) for the immediate team checklist.
+
+## Current implementation status
+
+- Pratyush-owned orchestration, dashboard, resilience, documentation, and integration-preparation work is complete on `pratyush/orchestration-dashboard`.
+- The remaining implementation work belongs to the graph and eBPF detector branches.
+- The project reaches full definition-of-done after both services pass the required-mode integration check and the team completes one live/replay end-to-end demo.
