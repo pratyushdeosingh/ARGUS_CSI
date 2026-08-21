@@ -74,6 +74,33 @@ services/graph-detector/    Pratham's financial graph detector
 services/ebpf-detector/     Nitin's Linux/eBPF detector
 ```
 
+## Pratham graph detector — complete
+
+The implementation on `pratham/graph-detector` provides an explainable,
+deterministic NetworkX detector with behavioral-baseline, temporal-path,
+velocity, amount, beneficiary, device/IP, funds-forwarded, and fan-in/fan-out
+features. It exposes:
+
+- `GET http://127.0.0.1:8001/health`
+- `POST http://127.0.0.1:8001/analyze`
+- `POST http://127.0.0.1:8001/visualize` for Cytoscape-compatible elements
+
+Run and verify it from the repository root on Windows:
+
+```powershell
+python -m pip install -r services/graph-detector/requirements.txt
+python -m pytest services/graph-detector/tests backend/tests -q
+python -m uvicorn app:app --app-dir services/graph-detector --host 127.0.0.1 --port 8001
+```
+
+The canonical normal fixture scores `0.000`; the attack fixture scores `0.898`
+and identifies `ACC-101`, the complete mule chain, `TX-1001..TX-1003`, and the
+shared suspicious IP. The test suite also validates the real detector response
+against the shared JSON Schema and passes it into ARGUS correlation, producing
+a critical incident. See
+[`services/graph-detector/README.md`](services/graph-detector/README.md) for the
+feature weights, API examples, Docker instructions, and integration details.
+
 ## Start the existing backend
 
 Python 3.11 is recommended.
