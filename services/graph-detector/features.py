@@ -8,7 +8,7 @@ from statistics import median
 import networkx as nx
 
 from graph_builder import TemporalPath, active_transactions, find_temporal_paths
-from models import Transaction
+from graph_models import Transaction
 
 
 @dataclass

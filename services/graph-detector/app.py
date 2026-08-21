@@ -7,7 +7,13 @@ from pathlib import Path
 from fastapi import FastAPI
 
 from detector import GraphDetector
-from models import GraphSignal, HealthResponse, Transaction, TransactionBatch, VisualizationResponse
+from graph_models import (
+    GraphSignal,
+    HealthResponse,
+    Transaction,
+    TransactionBatch,
+    VisualizationResponse,
+)
 from visualization import to_cytoscape
 
 

@@ -1,328 +1,257 @@
 # ARGUS — Autonomous Financial Threat Response
 
-ARGUS is a hackathon prototype of a **Financial Security Operations Center (Financial SOC)**. It detects a coordinated attack by combining abnormal movement of money through a financial graph with suspicious behavior inside payment infrastructure.
+[![CI](https://github.com/pratyushdeosingh/ARGUS_CSI/actions/workflows/ci.yml/badge.svg)](https://github.com/pratyushdeosingh/ARGUS_CSI/actions/workflows/ci.yml)
 
-ARGUS correlates both signals, explains the incident, recommends containment, and requires a human analyst to approve critical simulated actions.
+ARGUS is an explainable, human-governed **Financial Security Operations Center (Financial SOC)** prototype. It detects a coordinated financial attack by correlating two views that are usually investigated separately:
 
-> This project uses synthetic data and simulated response actions. It is not a real banking system and must not be connected to real financial accounts.
+- suspicious movement of money across an account graph; and
+- suspicious process, file, and network activity inside payment infrastructure.
 
-## Project status
+ARGUS turns those signals into one evidence-backed incident, recommends containment, and keeps every critical action behind explicit analyst approval. The entire demo uses synthetic data and simulated response actions, so it is safe and deterministic for a hackathon environment.
 
-Last verified: **21 August 2026** on branch
-`pratyush/orchestration-dashboard`.
+> **Safety boundary:** ARGUS is not a banking system. Do not connect it to real accounts, production infrastructure, secrets, or enforcement controls.
 
-| Component | Owner | Status | Latest capability |
-|---|---|---|---|
-| Shared contracts and fixtures | Team | Complete | Strict transaction, graph, system-signal, and incident schemas with canonical normal/attack data |
-| ARGUS orchestration API | Pratyush | Complete | Simulation, strict signal validation, correlation, policy, human approval, audit trail, and detector status API |
-| SOC dashboard | Pratyush | Complete | Staged attack story, Cytoscape graph, evidence panels, service provenance, fallback warnings, containment, and audit UI |
-| Detector integration layer | Pratyush | Complete | Concurrent HTTP adapters, timeouts, `auto`/`fixture`/`required` modes, last-known caching, and controlled fallbacks |
-| Financial graph detector | Pratham | In progress | Must provide `GET /health` and `POST /analyze` on port `8001` |
-| eBPF/replay detector | Nitin | In progress | Must provide `GET /health`, `POST /simulate`, and `GET /signals/latest` on port `8002` |
-| Full live end-to-end run | Team | Awaiting detectors | ARGUS is ready; final verification begins when both detector services are available |
+## Why ARGUS matters
 
-Current verification results:
+Transaction monitoring can identify an unusual transfer, while infrastructure monitoring can identify a compromised payment process. Either alert alone can be noisy. ARGUS raises confidence only when independent evidence agrees—for example, when both detectors observe `185.220.101.10` within the same short time window.
 
-- Backend: **10 tests passing**
-- Frontend: **4 tests passing**
-- Frontend TypeScript/Vite production build: **passing**
-- Shared detector JSON contracts: **unchanged**
+The result is a clear story an analyst can verify:
 
-## The demo in one minute
-
-1. The dashboard begins in a healthy state.
-2. The operator clicks **Simulate Attack**.
-3. `ACC-101` logs in using new device `DEV-99` and suspicious IP `185.220.101.10`.
-4. Money moves rapidly through `ACC-202`, `ACC-303`, and `ACC-404`.
-5. Pratham's graph detector reports suspicious multi-hop fund movement.
-6. Nitin's eBPF detector reports suspicious payment-service behavior involving the same IP and time window.
-7. Pratyush's ARGUS core correlates both signals into one critical incident.
-8. A human analyst approves the simulated containment actions.
+1. `ACC-101` appears from a new device and suspicious IP.
+2. ₹85,000 rapidly moves through three mule accounts.
+3. The payment service exhibits suspicious process, fake-sensitive-file, and network activity.
+4. ARGUS links the shared IP and timestamps into critical incident `INC-001`.
+5. An analyst approves simulated account freeze, transfer cancellation, and service isolation.
+6. Every action is recorded in an audit trail.
 
 ## Architecture
 
-```text
-Synthetic transaction stream
-          |
-          v
-Pratham: graph detector -----------\
-                                    \
-                                     > Pratyush: ARGUS orchestration
-                                    /    correlation + explanation
-Nitin: eBPF detector --------------/     policy + human approval
-                                              |
-                                              v
-                                      React SOC dashboard
+```mermaid
+flowchart LR
+    TX["Synthetic transactions"] --> GRAPH["Financial graph detector<br/>NetworkX + temporal rules"]
+    SYS["Replay or live Linux telemetry"] --> EBPF["eBPF detector<br/>process + file + network"]
+    GRAPH -->|"GraphSignal"| CORE["ARGUS orchestration<br/>correlation + policy"]
+    EBPF -->|"SystemSignal"| CORE
+    CORE --> INCIDENT["Explainable incident"]
+    INCIDENT --> UI["React SOC dashboard"]
+    UI --> APPROVAL{"Analyst approval"}
+    APPROVAL -->|"approved"| ACTIONS["Simulated containment<br/>+ audit trail"]
 ```
 
-The components are developed separately only after agreeing on their interfaces. They communicate with JSON over HTTP. The files in [`contracts/`](contracts/) are the source of truth.
+All services exchange strict JSON contracts from [`contracts/`](contracts/). The dashboard talks only to the orchestration API; it never bypasses the decision and policy layer to call detectors directly.
 
-## Team ownership
-
-| Member | Branch | Owned paths | Deliverable |
+| Component | Responsibility | Runtime | Port |
 |---|---|---|---|
-| Pratyush (`pratyushdeosingh`) | `pratyush/orchestration-dashboard` | `backend/app/`, `frontend/`, `docs/` | Simulator, correlation, policy, dashboard, integration |
-| Pratham (`Prathamw007`) | `pratham/graph-detector` | `services/graph-detector/` | Transactions in; financial risk and suspicious graph entities out |
-| Nitin (`nitinXjoshi`) | `nitin/ebpf-telemetry` | `services/ebpf-detector/` | Linux activity in; infrastructure risk and indicators out |
+| ARGUS backend | Collects signals, correlates evidence, applies approval policy, records audit events | FastAPI | `8000` |
+| Graph detector | Finds identity changes, unusual amounts, new beneficiaries, velocity, temporal mule paths, forwarded funds, and fan-in/fan-out | FastAPI + NetworkX | `8001` |
+| eBPF detector | Converts safe process, file, and network observations into infrastructure risk; supports portable replay and live Linux capture | FastAPI + bpftrace/replay | `8002` |
+| SOC dashboard | Visualizes attack progression, transaction graph, detector provenance, incident evidence, containment, and audit history | React + Vite | `5173` |
 
-Do not change a shared contract silently. Open a pull request and coordinate the change with all three members.
+## Detection and correlation
 
-## Canonical identifiers
+### Financial graph signal
 
-All components must use these identifiers in the main demo:
+The graph detector compares the transaction batch with an immutable healthy baseline and emits a deterministic `GraphSignal`. The canonical healthy fixture scores `0.000`; the attack fixture scores `0.898` and identifies the complete `ACC-101 → ACC-202 → ACC-303 → ACC-404` chain.
 
-| Entity | Identifier |
-|---|---|
-| Compromised account | `ACC-101` |
-| Mule accounts | `ACC-202`, `ACC-303`, `ACC-404` |
-| New attacker device | `DEV-99` |
-| Suspicious shared IP | `185.220.101.10` |
-| Payment host | `payment-node-01` |
-| Payment service | `payment-api` |
-| Payment process | `payment-worker` |
+### Infrastructure signal
 
-## Repository layout
+The eBPF detector normalizes three safe evidence categories:
+
+- an unexpected child process;
+- access to a dedicated fake configuration file; and
+- a controlled connection mapped to the canonical threat-intelligence IP.
+
+Normal replay scores `0.03`; attack replay scores `0.87`. Replay and live Linux collection produce the same `SystemSignal` contract, and the dashboard always displays the true source mode.
+
+### Explainable decision
+
+ARGUS uses a transparent score instead of an opaque model:
 
 ```text
-backend/                    ARGUS FastAPI orchestration service
-  app/                      Models, simulator, correlation, policy, API
-  tests/                    Backend tests
-contracts/                  Stable JSON interfaces between components
-data/normal/                Canonical healthy demo data
-data/attack/                Canonical attack data and mock detector signals
-docs/                       Architecture, integration, and demo guidance
-frontend/                   Pratyush's React SOC dashboard
-services/graph-detector/    Pratham's financial graph detector
-services/ebpf-detector/     Nitin's Linux/eBPF detector
+confidence = 0.50 × graph risk
+           + 0.35 × infrastructure risk
+           + up to 0.15 shared-evidence bonus
 ```
 
-## Quick start
+The canonical integrated run produces `0.904` confidence: a critical incident awaiting approval. Shared IP evidence contributes `0.10`; signals within five minutes contribute `0.05`.
 
-Python 3.11 is recommended.
+| Confidence | Severity | Initial response state |
+|---:|---|---|
+| `≥ 0.85` | Critical | Awaiting analyst approval |
+| `≥ 0.70` | High | Awaiting analyst approval |
+| `≥ 0.40` | Suspicious | Monitoring |
+| `< 0.40` | Informational | Monitoring |
 
-### Windows PowerShell
+## Quick start with Docker
+
+This is the recommended hackathon setup. It launches all four components, waits for detector health checks, and runs the eBPF service in deterministic replay mode.
+
+### Prerequisites
+
+- Git
+- Docker Desktop or Docker Engine with Docker Compose v2
+
+```bash
+git clone https://github.com/pratyushdeosingh/ARGUS_CSI.git
+cd ARGUS_CSI
+docker compose up --build
+```
+
+Open [http://127.0.0.1:5173](http://127.0.0.1:5173), wait for **SYSTEM OPERATIONAL**, and select **SIMULATE ATTACK**.
+
+Useful service URLs:
+
+- Dashboard: [http://127.0.0.1:5173](http://127.0.0.1:5173)
+- ARGUS API docs: [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
+- Graph detector docs: [http://127.0.0.1:8001/docs](http://127.0.0.1:8001/docs)
+- eBPF detector docs: [http://127.0.0.1:8002/docs](http://127.0.0.1:8002/docs)
+
+Stop the stack with `Ctrl+C`, then run `docker compose down`.
+
+## Run locally without Docker
+
+Python 3.11+ and Node.js 22+ are recommended. The commands below use PowerShell from the repository root.
+
+### 1. Install dependencies
 
 ```powershell
 py -3.11 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -r backend/requirements.txt
-python -m uvicorn backend.app.main:app --reload
+python -m pip install -r services/graph-detector/requirements.txt
+python -m pip install -r services/ebpf-detector/requirements.txt
+corepack enable
+pnpm --dir frontend install --frozen-lockfile
 ```
 
-### macOS/Linux
+### 2. Start each service
 
-```bash
-python3.11 -m venv .venv
-source .venv/bin/activate
-python -m pip install -r backend/requirements.txt
-python -m uvicorn backend.app.main:app --reload
-```
-
-Open `http://127.0.0.1:8000/docs` to test the API.
-
-Start the dashboard in a second terminal:
+Open four terminals and activate the virtual environment in the first three.
 
 ```powershell
-cd frontend
-pnpm install
-pnpm dev
+# Terminal 1 — financial graph detector
+python -m uvicorn app:app --app-dir services/graph-detector --host 127.0.0.1 --port 8001
 ```
-
-Open `http://127.0.0.1:5173`. The frontend calls
-`http://127.0.0.1:8000` by default.
-
-Important endpoints:
-
-- `GET /health`
-- `GET /api/demo/normal`
-- `POST /api/demo/simulate-attack`
-- `GET /api/detectors/status`
-- `POST /api/signals/correlate`
-- `POST /api/incidents/INC-001/approve`
-- `GET /api/audit`
-
-### Verification commands
-
-Run backend tests from the repository root:
-
-```bash
-python -m pytest backend/tests
-```
-
-Run frontend tests and create a production build:
 
 ```powershell
-cd frontend
-pnpm test
-pnpm run build
+# Terminal 2 — portable eBPF replay detector
+$env:ARGUS_EBPF_MODE = "replay"
+python -m uvicorn api:app --app-dir services/ebpf-detector --host 127.0.0.1 --port 8002
 ```
 
-### Detector integration modes
+```powershell
+# Terminal 3 — orchestration; fail visibly if either detector is unavailable
+$env:ARGUS_DETECTOR_MODE = "required"
+$env:GRAPH_DETECTOR_URL = "http://127.0.0.1:8001"
+$env:EBPF_DETECTOR_URL = "http://127.0.0.1:8002"
+python -m uvicorn backend.app.main:app --host 127.0.0.1 --port 8000
+```
 
-The orchestration service is integration-ready before the detector branches
-land. It calls the documented services on ports `8001` and `8002`, validates
-their responses, and exposes the real signal origin to the dashboard.
+```powershell
+# Terminal 4 — dashboard
+pnpm --dir frontend dev
+```
 
-Copy `.env.example` values into your shell or `.env` runner configuration.
-Use `ARGUS_DETECTOR_MODE=auto` for normal development, `fixture` for a fully
-offline demonstration, and `required` when verifying teammate services. With
-both services running, execute:
+On macOS/Linux, activate with `source .venv/bin/activate`, use `python3` where needed, and set variables with `export NAME=value`.
+
+### Offline fallback
+
+Set `ARGUS_DETECTOR_MODE=fixture` to run the backend and dashboard without either detector. Fixture origin is visible in the UI, so the demo never presents fallback data as a live service result.
+
+## Demo walkthrough
+
+1. Confirm both detector cards report service availability; `REPLAY SERVICE` is expected for eBPF under Docker.
+2. Click **SIMULATE ATTACK**.
+3. Follow the new-device event and rapid mule transfers on the timeline and graph.
+4. Compare the independent financial and infrastructure findings.
+5. Inspect the critical ARGUS verdict and its shared IP/time evidence.
+6. Click **APPROVE CONTAINMENT**.
+7. Confirm all three simulated actions complete and appear in the audit trail.
+
+The full presentation narrative is in [`docs/demo-script.md`](docs/demo-script.md).
+
+## API overview
+
+| Method | Endpoint | Purpose |
+|---|---|---|
+| `GET` | `/health` | Backend liveness |
+| `GET` | `/api/demo/normal` | Reset the demo to its healthy state |
+| `GET` | `/api/detectors/status` | Report availability, source, and live/replay/fixture provenance |
+| `POST` | `/api/demo/simulate-attack` | Collect both detector signals and create the incident |
+| `POST` | `/api/signals/correlate` | Correlate supplied contract-valid signals |
+| `POST` | `/api/incidents/{id}/approve` | Execute approved simulated actions |
+| `GET` | `/api/audit` | Return the containment audit trail |
+
+Detector interfaces and payload rules are documented in [`docs/integration.md`](docs/integration.md).
+
+## Configuration
+
+Copy [`.env.example`](.env.example) when you need local overrides.
+
+| Variable | Values/default | Purpose |
+|---|---|---|
+| `ARGUS_DETECTOR_MODE` | `auto`, `fixture`, `required` | Prefer services with fallback, force fixtures, or fail if integration is unavailable |
+| `GRAPH_DETECTOR_URL` | `http://127.0.0.1:8001` | Graph service base URL |
+| `EBPF_DETECTOR_URL` | `http://127.0.0.1:8002` | eBPF service base URL |
+| `DETECTOR_TIMEOUT_SECONDS` | `2.5` | Per-service HTTP timeout |
+| `ARGUS_EBPF_MODE` | `auto`, `replay`, `live` | Choose portable replay or strict Linux collection |
+| `ARGUS_GRAPH_BASELINE` | Canonical normal fixture | Optional alternate synthetic baseline |
+| `VITE_API_BASE_URL` | `http://127.0.0.1:8000` | Browser-facing orchestration URL |
+
+## Verification
+
+Run the complete repository checks from the root:
+
+```powershell
+python -m pytest -q
+pnpm --dir frontend test
+pnpm --dir frontend build
+```
+
+With both detector services running, verify real HTTP collection and contract validation:
 
 ```powershell
 python -m backend.app.integration_check
 ```
 
-No detector code needs to be copied into the orchestration branch. After the
-team branches merge, only their service startup commands or Compose definitions
-need to be added.
+The verified integrated baseline is:
 
-| Mode | Behavior | Recommended use |
+- Python: **32 passed**, with **1 live-eBPF test intentionally skipped** unless explicitly enabled on a privileged Linux host;
+- Frontend: **4 passed**; and
+- Production frontend build: successful, with Cytoscape split into a lazy-loaded visualization chunk.
+
+GitHub Actions repeats the Python tests, frontend tests, and production build for every pull request and push to `main`.
+
+## Repository map
+
+```text
+backend/                      ARGUS correlation, policy, API, and tests
+contracts/                    Authoritative JSON Schemas
+data/normal/                  Healthy behavioral baseline
+data/attack/                  Canonical attack and replay fixtures
+docs/                         Architecture, integration, demo, release checklist
+frontend/                     React/Vite SOC dashboard
+services/graph-detector/      Explainable temporal financial graph analysis
+services/ebpf-detector/       Safe live/replay infrastructure telemetry
+docker-compose.yml            Full four-component demo stack
+pytest.ini                    Integrated Python test discovery
+```
+
+## Team contributions
+
+| Contributor | Primary ownership | Outcome |
 |---|---|---|
-| `auto` | Uses service responses, then last-known signals, then canonical fixtures | Normal development and resilient demos |
-| `fixture` | Skips detector HTTP calls and always uses canonical fixtures | Fully offline, deterministic presentation |
-| `required` | Returns an integration error instead of using a fallback | Final contract and end-to-end verification |
+| Pratyush | `backend/`, `frontend/`, integration | Orchestration, policy, detector gateway, dashboard, and end-to-end flow |
+| Pratham | `services/graph-detector/` | Deterministic graph risk engine, visualization output, contracts, and tests |
+| Nitin | `services/ebpf-detector/` | Safe bpftrace collector, replay mode, normalization, scoring, API, and tests |
 
-Detector URLs and timeout are configured with:
+## Safety, provenance, and limitations
 
-```text
-GRAPH_DETECTOR_URL=http://127.0.0.1:8001
-EBPF_DETECTOR_URL=http://127.0.0.1:8002
-DETECTOR_TIMEOUT_SECONDS=2.5
-```
+- All account, transaction, host, process, file, and IP data is synthetic.
+- Docker uses replay mode because live eBPF requires a Linux kernel, `bpftrace`, and root privileges.
+- The live collector observes only the bundled harmless `payment-worker`; it does not read file contents or contact the suspicious IP.
+- The backend stores demo state in memory; restarting it resets incidents and audit events.
+- Containment is simulated. No real account freeze, transfer cancellation, or service isolation occurs.
+- Detector fallback is explicit: the UI distinguishes service, last-known, fixture, and unavailable states.
 
-The dashboard never labels a fixture or cached response as a live detector
-connection. Each signal displays its actual origin: service, replay,
-last-known, fixture, or unavailable.
-
-### Integration handoff
-
-When Pratham and Nitin finish their services:
-
-1. Start the graph detector on port `8001` and the eBPF adapter on port `8002`.
-2. Keep the JSON field names exactly aligned with `contracts/`.
-3. Set `ARGUS_DETECTOR_MODE=required`.
-4. Run `python -m backend.app.integration_check`.
-5. Start ARGUS and the dashboard, run the canonical attack, approve containment, and confirm three audit entries.
-
-No dashboard changes should be necessary unless a teammate response violates
-the agreed contract.
-
-## Git workflow
-
-After accepting the collaborator invitation:
-
-```bash
-git clone https://github.com/pratyushdeosingh/ARGUS_CSI.git
-cd ARGUS_CSI
-git fetch origin
-```
-
-Switch to your assigned branch and merge the shared foundation:
-
-```bash
-git switch pratham/graph-detector
-# Alternatives: pratyush/orchestration-dashboard or nitin/ebpf-telemetry
-git merge origin/main
-```
-
-Use small commits, push only to your assigned branch, and open a pull request into `main` when a working milestone is ready.
-
-## Instructions for Pratyush's AI
-
-Copy this prompt into the AI used for the orchestration/dashboard work:
-
-```text
-You are helping me build ARGUS, a hackathon Financial SOC prototype. I am
-Pratyush and own orchestration, correlation, policy, human approval, dashboard,
-and final integration. Work only on branch pratyush/orchestration-dashboard.
-
-Read README.md, every file in contracts/, docs/architecture.md,
-docs/integration.md, and the existing backend/app code before changing files.
-The shared demo identifiers and JSON field names must remain unchanged.
-
-My goal is a dark professional React SOC dashboard connected to the FastAPI
-backend. The flow is normal state -> Simulate Attack -> graph signal -> eBPF
-signal -> correlated incident -> explanation -> analyst approval -> simulated
-containment audit log. Build against mock signals first, then replace them with
-real detector HTTP responses without changing the dashboard's incident model.
-Do not require a paid AI API. Keep critical response actions behind human
-approval. Add tests for correlation and policy behavior. Avoid editing detector
-services unless integration requires a coordinated contract change.
-```
-
-## Instructions for Pratham's AI
-
-Copy this prompt into the AI used for graph/ML work:
-
-```text
-You are helping me build the financial graph detector for ARGUS, a hackathon
-Financial SOC prototype. I am Pratham. Work only on branch
-pratham/graph-detector and primarily inside services/graph-detector/.
-
-Read README.md, contracts/transaction.schema.json,
-contracts/graph-signal.schema.json, data/normal/transactions.json,
-data/attack/transactions.json, and docs/integration.md before coding. Do not
-change shared identifiers or the output contract without team agreement.
-
-Build a Python service whose core behavior is:
-transactions -> temporal/graph analysis -> GraphSignal.
-Start with a reliable NetworkX/pandas baseline using new device/IP, unusual
-amount, new beneficiary, transaction velocity, rapid multi-hop movement,
-fan-in/fan-out, and short time windows. Return a 0..1 risk score, suspicious
-account IDs, suspicious transaction IDs, related IPs, and human-readable
-reasons exactly matching contracts/graph-signal.schema.json. Expose GET /health
-and POST /analyze using FastAPI. Add tests proving the normal fixture scores
-lower than the attack fixture. After the baseline works, add a lightweight
-temporal GNN or GraphSAGE experiment if time permits; keep the baseline as a
-fallback. Provide graph nodes/edges for Cytoscape and document integration.
-```
-
-Full instructions: [`services/graph-detector/README.md`](services/graph-detector/README.md).
-
-## Instructions for Nitin's AI
-
-Copy this prompt into the AI used for eBPF/security work:
-
-```text
-You are helping me build the infrastructure detector for ARGUS, a hackathon
-Financial SOC prototype. I am Nitin. Work only on branch nitin/ebpf-telemetry
-and primarily inside services/ebpf-detector/.
-
-Read README.md, contracts/system-signal.schema.json,
-data/attack/mock-system-signal.json, and docs/integration.md before coding. eBPF
-requires a Linux kernel; my Mac must use an Ubuntu VM, Linux cloud machine, or
-another verified Linux environment. Confirm the environment first.
-
-Use bpftrace, BCC, or libbpf to observe a harmless simulated payment service.
-Capture process execution, sensitive-file access, and outbound network
-connections. Convert raw telemetry into a 0..1 risk score and a SystemSignal
-that exactly matches contracts/system-signal.schema.json. Use canonical host
-payment-node-01, service payment-api, process payment-worker, and shared IP
-185.220.101.10. Expose GET /health and either POST /simulate plus GET
-/signals/latest, or push the signal to ARGUS. Save sanitized recorded real
-telemetry and implement replay mode so the demo works if kernel permissions
-fail. Include setup, commands, safety notes, and signal-conversion tests. Never
-perform destructive actions or access real secrets.
-```
-
-Full instructions: [`services/ebpf-detector/README.md`](services/ebpf-detector/README.md).
-
-## Definition of done
-
-The prototype is complete when:
-
-- normal activity does not generate a critical incident;
-- the canonical attack creates a high graph risk score;
-- real or replayed eBPF telemetry creates a high infrastructure risk score;
-- both findings correlate into one critical ARGUS incident;
-- the dashboard explains the shared evidence;
-- containment requires human approval and records an audit trail; and
-- the complete demo runs locally from documented setup.
-
-See [`docs/team-start-here.md`](docs/team-start-here.md) for the immediate team checklist.
-
-## Current implementation status
-
-- Pratyush-owned orchestration, dashboard, resilience, documentation, and integration-preparation work is complete on `pratyush/orchestration-dashboard`.
-- The remaining implementation work belongs to the graph and eBPF detector branches.
-- The project reaches full definition-of-done after both services pass the required-mode integration check and the team completes one live/replay end-to-end demo.
+For privileged Linux setup and safeguards, read [`services/ebpf-detector/SETUP_LINUX.md`](services/ebpf-detector/SETUP_LINUX.md). For the final pre-demo gate, use [`docs/release-checklist.md`](docs/release-checklist.md).

@@ -1,7 +1,7 @@
 """Convert a transaction graph into Cytoscape-compatible elements."""
 
 from graph_builder import build_graph
-from models import (
+from graph_models import (
     Transaction,
     VisualizationEdge,
     VisualizationEdgeData,

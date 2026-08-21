@@ -22,13 +22,13 @@ def attack_payload() -> list[dict]:
 
 @pytest.fixture
 def normal_transactions(normal_payload):
-    from models import Transaction
+    from graph_models import Transaction
 
     return [Transaction.model_validate(item) for item in normal_payload]
 
 
 @pytest.fixture
 def attack_transactions(attack_payload):
-    from models import Transaction
+    from graph_models import Transaction
 
     return [Transaction.model_validate(item) for item in attack_payload]

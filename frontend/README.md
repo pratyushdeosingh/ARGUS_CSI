@@ -1,6 +1,8 @@
 # ARGUS dashboard — Pratyush
 
-Build a dark, professional React/Vite SOC interface here after the backend mock flow is verified.
+This React/Vite interface is the analyst-facing layer of ARGUS. It visualizes
+the healthy baseline, staged attack timeline, transaction graph, detector
+provenance, correlated incident, approval gate, and containment audit trail.
 
 Required views on one main screen:
 
@@ -15,7 +17,7 @@ Required views on one main screen:
 
 The dashboard should call the ARGUS backend on port `8000`. It must not call detector services directly; orchestration belongs in the backend.
 
-## Current milestone
+## Included capabilities
 
 The first working dashboard includes:
 

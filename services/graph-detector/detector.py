@@ -5,7 +5,7 @@ from hashlib import sha256
 
 from features import Evidence, extract_evidence
 from graph_builder import active_transactions, build_graph
-from models import GraphSignal, Transaction
+from graph_models import GraphSignal, Transaction
 
 
 FEATURE_WEIGHTS = {

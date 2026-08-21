@@ -42,6 +42,7 @@ class Transaction(StrictModel):
     def normalize_currency(cls, value: str) -> str:
         return value.upper()
 
+
 class GraphSignal(StrictModel):
     signal_id: str
     source: Literal["graph_detector"] = "graph_detector"

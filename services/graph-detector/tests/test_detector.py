@@ -1,7 +1,7 @@
 from copy import deepcopy
 
 from detector import GraphDetector
-from models import Transaction
+from graph_models import Transaction
 
 
 def test_attack_scores_clearly_above_normal(normal_transactions, attack_transactions):

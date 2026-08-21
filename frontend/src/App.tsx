@@ -1,4 +1,4 @@
-import cytoscape from "cytoscape";
+import type { Core } from "cytoscape";
 import {
   Activity,
   AlertTriangle,
@@ -112,6 +112,10 @@ function TransactionGraph({
   useEffect(() => {
     if (!containerRef.current) return;
 
+    let graph: Core | undefined;
+    let resizeObserver: ResizeObserver | undefined;
+    let cancelled = false;
+
     const accountIds = Array.from(
       new Set(
         transactions.flatMap((transaction) => [
@@ -137,13 +141,17 @@ function TransactionGraph({
       })),
     ];
 
-    const graph = cytoscape({
-      container: containerRef.current,
-      elements,
-      userZoomingEnabled: true,
-      minZoom: 0.65,
-      maxZoom: 1.6,
-      style: [
+    const renderGraph = async () => {
+      const { default: cytoscape } = await import("cytoscape");
+      if (cancelled || !containerRef.current) return;
+
+      graph = cytoscape({
+        container: containerRef.current,
+        elements,
+        userZoomingEnabled: true,
+        minZoom: 0.65,
+        maxZoom: 1.6,
+        style: [
         {
           selector: "node",
           style: {
@@ -201,24 +209,28 @@ function TransactionGraph({
             width: 3,
           },
         },
-      ],
-      layout: {
-        name: "breadthfirst",
-        directed: true,
-        spacingFactor: 1.25,
-        padding: 24,
-      },
-    });
+        ],
+        layout: {
+          name: "breadthfirst",
+          directed: true,
+          spacingFactor: 1.25,
+          padding: 24,
+        },
+      });
 
-    const resizeObserver = new ResizeObserver(() => {
-      graph.resize();
-      graph.fit(undefined, 24);
-    });
-    resizeObserver.observe(containerRef.current);
+      resizeObserver = new ResizeObserver(() => {
+        graph?.resize();
+        graph?.fit(undefined, 24);
+      });
+      resizeObserver.observe(containerRef.current);
+    };
+
+    void renderGraph();
 
     return () => {
-      resizeObserver.disconnect();
-      graph.destroy();
+      cancelled = true;
+      resizeObserver?.disconnect();
+      graph?.destroy();
     };
   }, [attackActive, transactions]);
 

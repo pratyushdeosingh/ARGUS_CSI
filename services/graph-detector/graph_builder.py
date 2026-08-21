@@ -6,7 +6,7 @@ from datetime import timedelta
 
 import networkx as nx
 
-from models import Transaction, TransactionStatus
+from graph_models import Transaction, TransactionStatus
 
 
 @dataclass(frozen=True)

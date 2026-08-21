@@ -2,7 +2,7 @@
 
 ## Mission
 
-Observe harmless Linux payment-service activity, identify suspicious process/file/network behavior, and return a contract-valid `SystemSignal` to ARGUS.
+This service observes harmless Linux payment-service activity, identifies suspicious process/file/network behavior, and returns a contract-valid `SystemSignal` to ARGUS. Its deterministic replay mode keeps the complete demo portable when eBPF privileges are unavailable.
 
 ## Environment requirement
 
@@ -18,7 +18,7 @@ Create a harmless local `payment-worker` process that:
 
 Do not access real credentials, real banking data, or unrelated system files. Do not perform destructive containment.
 
-## Suggested structure
+## Structure
 
 ```text
 services/ebpf-detector/
@@ -64,7 +64,3 @@ pytest -q tests
 ```
 
 Use `POST /simulate?scenario=normal` to verify benign activity stays low risk. See [`SETUP_LINUX.md`](SETUP_LINUX.md) for live setup and safety constraints.
-
-## AI handoff
-
-Use the Nitin prompt in the root README. Tell the AI the work is an authorized synthetic lab, but require safe paths, no secrets, and no destructive behavior.
