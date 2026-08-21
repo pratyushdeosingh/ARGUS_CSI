@@ -50,6 +50,21 @@ Live and replay modes must both return `contracts/system-signal.schema.json`.
 - Output uses the canonical host, service, process, and shared IP.
 - Replay mode works without eBPF permissions.
 
+## Implementation
+
+The detector supports `ARGUS_EBPF_MODE=auto|replay|live`. `auto` uses live bpftrace when available and otherwise clearly reports and uses replay. `live` is strict and returns `503` if its Linux prerequisites are missing.
+
+```powershell
+python -m pip install -r requirements.txt
+$env:ARGUS_EBPF_MODE = "replay"
+python -m uvicorn api:app --host 127.0.0.1 --port 8002
+Invoke-RestMethod -Method Post http://127.0.0.1:8002/simulate
+Invoke-RestMethod http://127.0.0.1:8002/signals/latest
+pytest -q tests
+```
+
+Use `POST /simulate?scenario=normal` to verify benign activity stays low risk. See [`SETUP_LINUX.md`](SETUP_LINUX.md) for live setup and safety constraints.
+
 ## AI handoff
 
 Use the Nitin prompt in the root README. Tell the AI the work is an authorized synthetic lab, but require safe paths, no secrets, and no destructive behavior.

@@ -1,0 +1,14 @@
+[
+  {
+    "timestamp": "2026-08-17T15:25:00Z",
+    "event_type": "file_open",
+    "process": "payment-worker",
+    "details": {"path": "fixtures/healthcheck.json"}
+  },
+  {
+    "timestamp": "2026-08-17T15:25:01Z",
+    "event_type": "network_connect",
+    "process": "payment-worker",
+    "details": {"destination_ip": "127.0.0.1"}
+  }
+]

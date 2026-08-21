@@ -1,4 +1,17 @@
 services:
+  ebpf-detector:
+    image: python:3.11-slim
+    working_dir: /workspace/services/ebpf-detector
+    volumes:
+      - .:/workspace
+    command: >-
+      sh -c "pip install -r requirements.txt &&
+      uvicorn api:app --host 0.0.0.0 --port 8002"
+    environment:
+      ARGUS_EBPF_MODE: replay
+    ports:
+      - "8002:8002"
+
   argus-backend:
     image: python:3.11-slim
     working_dir: /workspace
@@ -10,6 +23,6 @@ services:
     ports:
       - "8000:8000"
 
-# Graph and eBPF services will be added when their implementations exist.
-# Live eBPF requires Linux-specific privileges and is not a portable Docker
-# dependency for the final demo.
+# Live eBPF requires Linux-specific privileges, so Compose intentionally runs
+# the detector's deterministic replay mode. Run it directly on Linux for live
+# tracing.
