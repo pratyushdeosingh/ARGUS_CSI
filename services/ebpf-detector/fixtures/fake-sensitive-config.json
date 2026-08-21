@@ -1,0 +1,5 @@
+{
+  "purpose": "ARGUS synthetic eBPF demonstration only",
+  "contains_real_secrets": false,
+  "test_value": "not-a-credential"
+}
