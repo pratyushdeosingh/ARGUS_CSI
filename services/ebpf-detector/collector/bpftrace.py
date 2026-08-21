@@ -26,6 +26,12 @@ tracepoint:syscalls:sys_enter_execve /comm == "payment-worker"/ {
 tracepoint:syscalls:sys_enter_openat /comm == "payment-worker"/ {
   printf("{\"event_type\":\"file_open\",\"value\":\"%s\"}\n", str(args->filename));
 }
+tracepoint:syscalls:sys_enter_openat2 /comm == "payment-worker"/ {
+  printf("{\"event_type\":\"file_open\",\"value\":\"%s\"}\n", str(args->filename));
+}
+tracepoint:syscalls:sys_enter_open /comm == "payment-worker"/ {
+  printf("{\"event_type\":\"file_open\",\"value\":\"%s\"}\n", str(args->filename));
+}
 tracepoint:syscalls:sys_enter_connect /comm == "payment-worker"/ {
   printf("{\"event_type\":\"network_connect\",\"value\":\"observed\"}\n");
 }
@@ -53,6 +59,7 @@ def collect_live(timeout_seconds: float = 8.0) -> list[RawEvent]:
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
+        env={**os.environ, "BPFTRACE_MAX_STRLEN": "200"},
     )
     try:
         time.sleep(1.0)

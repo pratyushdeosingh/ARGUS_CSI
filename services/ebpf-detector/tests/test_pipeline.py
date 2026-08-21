@@ -4,6 +4,7 @@ from pathlib import Path
 from jsonschema import Draft202012Validator, FormatChecker
 
 from collector.replay import collect_replay
+from collector.bpftrace import TRACE_PROGRAM
 from models import RawEvent
 from normalizer import CANONICAL_SUSPICIOUS_IP, normalize_event, normalize_events
 from scorer import score_events
@@ -36,6 +37,12 @@ def test_attack_scores_much_higher_than_normal_activity() -> None:
 def test_duplicate_records_do_not_inflate_risk() -> None:
     events = normalize_events(collect_replay("attack"))
     assert score_events(events + events) == score_events(events)
+
+
+def test_live_trace_covers_linux_file_open_variants() -> None:
+    assert "sys_enter_open " in TRACE_PROGRAM
+    assert "sys_enter_openat " in TRACE_PROGRAM
+    assert "sys_enter_openat2 " in TRACE_PROGRAM
 
 
 def test_attack_signal_matches_shared_json_schema() -> None:
