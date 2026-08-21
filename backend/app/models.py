@@ -104,3 +104,15 @@ class AuditEvent(StrictModel):
     target: str
     actor: str
     result: str
+
+
+class DetectorComponentStatus(StrictModel):
+    availability: Literal["online", "degraded", "offline"]
+    origin: Literal["service", "last_known", "fixture", "none"]
+    mode: Literal["live", "replay", "fixture", "unknown"] = "unknown"
+    detail: str
+
+
+class DetectorStatus(StrictModel):
+    graph: DetectorComponentStatus
+    system: DetectorComponentStatus

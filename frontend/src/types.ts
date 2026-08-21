@@ -67,6 +67,22 @@ export interface AuditEvent {
   result: string;
 }
 
+export type DetectorAvailability = "online" | "degraded" | "offline";
+export type DetectorOrigin = "service" | "last_known" | "fixture" | "none";
+export type DetectorMode = "live" | "replay" | "fixture" | "unknown";
+
+export interface DetectorComponentStatus {
+  availability: DetectorAvailability;
+  origin: DetectorOrigin;
+  mode: DetectorMode;
+  detail: string;
+}
+
+export interface DetectorStatus {
+  graph: DetectorComponentStatus;
+  system: DetectorComponentStatus;
+}
+
 export interface NormalResponse {
   mode: "normal";
   transactions: Transaction[];
@@ -78,6 +94,7 @@ export interface AttackResponse {
   transactions: Transaction[];
   graph_signal: GraphSignal;
   system_signal: SystemSignal;
+  detector_status: DetectorStatus;
   incident: Incident;
 }
 

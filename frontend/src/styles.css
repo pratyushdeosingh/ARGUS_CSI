@@ -151,6 +151,15 @@ footer i {
   box-shadow: 0 0 8px rgba(78, 225, 178, 0.65);
 }
 
+.system-status.degraded {
+  color: var(--amber);
+}
+
+.system-status.degraded i {
+  background: var(--amber);
+  box-shadow: 0 0 8px rgba(230, 174, 85, 0.55);
+}
+
 .environment {
   color: #6f8881;
   padding: 4px 7px;
@@ -211,6 +220,52 @@ footer i {
   background: transparent;
   cursor: pointer;
   color: inherit;
+}
+
+.source-pill {
+  margin-left: auto;
+  padding: 4px 6px;
+  color: var(--muted);
+  background: #10201d;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 8px;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+}
+
+.source-pill.online {
+  color: var(--mint);
+  border-color: #2e6759;
+}
+
+.source-pill.degraded {
+  color: var(--amber);
+  border-color: #604c2c;
+}
+
+.source-pill.offline {
+  color: #ff9b90;
+  border-color: #67342f;
+}
+
+.detector-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  padding: 7px 8px;
+  color: #e4b96f;
+  background: rgba(88, 61, 24, 0.22);
+  border: 1px solid #514123;
+  border-radius: 5px;
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.detector-notice svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
 }
 
 main {

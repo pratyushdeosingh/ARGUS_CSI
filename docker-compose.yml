@@ -7,6 +7,13 @@ services:
     command: >-
       sh -c "pip install -r backend/requirements.txt &&
       uvicorn backend.app.main:app --host 0.0.0.0 --port 8000"
+    environment:
+      ARGUS_DETECTOR_MODE: ${ARGUS_DETECTOR_MODE:-auto}
+      GRAPH_DETECTOR_URL: ${GRAPH_DETECTOR_URL:-http://host.docker.internal:8001}
+      EBPF_DETECTOR_URL: ${EBPF_DETECTOR_URL:-http://host.docker.internal:8002}
+      DETECTOR_TIMEOUT_SECONDS: ${DETECTOR_TIMEOUT_SECONDS:-2.5}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "8000:8000"
 

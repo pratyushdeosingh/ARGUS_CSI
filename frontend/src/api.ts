@@ -1,6 +1,7 @@
 import type {
   ApprovalResponse,
   AttackResponse,
+  DetectorStatus,
   NormalResponse,
 } from "./types";
 
@@ -10,9 +11,20 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`, init);
   if (!response.ok) {
     const message = await response.text();
-    throw new Error(message || `ARGUS API returned ${response.status}`);
+    let detail = message;
+    try {
+      const payload = JSON.parse(message) as { detail?: string };
+      detail = payload.detail ?? message;
+    } catch {
+      // Preserve a non-JSON error body.
+    }
+    throw new Error(detail || `ARGUS API returned ${response.status}`);
   }
   return response.json() as Promise<T>;
+}
+
+export function loadDetectorStatus(): Promise<DetectorStatus> {
+  return request<DetectorStatus>("/api/detectors/status");
 }
 
 export function loadNormalState(): Promise<NormalResponse> {

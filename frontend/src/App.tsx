@@ -27,10 +27,12 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { approveIncident, loadNormalState, simulateAttack } from "./api";
+import { approveIncident, loadDetectorStatus, loadNormalState, simulateAttack } from "./api";
 import type {
   AttackResponse,
   AuditEvent,
+  DetectorComponentStatus,
+  DetectorStatus,
   Incident,
   Transaction,
 } from "./types";
@@ -85,6 +87,17 @@ function formatTime(timestamp: string) {
     hour12: false,
     timeZone: "UTC",
   }).format(new Date(timestamp));
+}
+
+export function detectorSourceLabel(status: DetectorComponentStatus | undefined) {
+  if (!status) return "CHECKING";
+  if (status.origin === "service" && status.mode !== "unknown") {
+    return `${status.mode.toUpperCase()} SERVICE`;
+  }
+  if (status.origin === "service") return "SERVICE";
+  if (status.origin === "last_known") return "LAST KNOWN";
+  if (status.origin === "fixture") return "FIXTURE";
+  return "UNAVAILABLE";
 }
 
 function TransactionGraph({
@@ -231,6 +244,7 @@ function SignalCard({
   score,
   findings,
   visible,
+  status,
 }: {
   icon: React.ReactNode;
   eyebrow: string;
@@ -238,6 +252,7 @@ function SignalCard({
   score: number;
   findings: string[];
   visible: boolean;
+  status?: DetectorComponentStatus;
 }) {
   return (
     <article className={classNames("signal-card", visible && "visible")}>
@@ -247,7 +262,19 @@ function SignalCard({
           <span className="eyebrow">{eyebrow}</span>
           <h3>{visible ? title : "Signal nominal"}</h3>
         </div>
+        <span
+          className={classNames("source-pill", status?.availability ?? "offline")}
+          title={status?.detail}
+        >
+          {detectorSourceLabel(status)}
+        </span>
       </div>
+      {status && status.availability !== "online" && (
+        <div className="detector-notice" role="status">
+          <AlertTriangle size={13} />
+          <span>{status.detail}</span>
+        </div>
+      )}
       <ScoreBar score={visible ? score : 0.08} tone={visible ? "danger" : "mint"} />
       <ul className="finding-list">
         {(visible ? findings : ["No anomalous behavior detected", "Baseline profile active"]).map(
@@ -319,6 +346,7 @@ function App() {
   const [attack, setAttack] = useState<AttackResponse | null>(null);
   const [incident, setIncident] = useState<Incident | null>(null);
   const [auditEvents, setAuditEvents] = useState<AuditEvent[]>([]);
+  const [detectorStatus, setDetectorStatus] = useState<DetectorStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [utcTime, setUtcTime] = useState(new Date());
@@ -334,8 +362,12 @@ function App() {
     setLoading(true);
     setError(null);
     try {
-      const response = await loadNormalState();
+      const [response, status] = await Promise.all([
+        loadNormalState(),
+        loadDetectorStatus(),
+      ]);
       setNormalTransactions(response.transactions);
+      setDetectorStatus(status);
       setAttack(null);
       setIncident(null);
       setAuditEvents([]);
@@ -346,6 +378,18 @@ function App() {
       setLoading(false);
     }
   }, [clearTimers]);
+
+  const refreshDetectorStatus = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      setDetectorStatus(await loadDetectorStatus());
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Detector health check failed.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     void resetDemo();
@@ -364,6 +408,7 @@ function App() {
     try {
       const response = await simulateAttack();
       setAttack(response);
+      setDetectorStatus(response.detector_status);
       setIncident(response.incident);
       setPhase(1);
       [2, 3, 4, 5].forEach((nextPhase, index) => {
@@ -371,8 +416,8 @@ function App() {
           window.setTimeout(() => setPhase(nextPhase as DemoPhase), 850 * (index + 1)),
         );
       });
-    } catch {
-      setError("Attack simulation failed because the ARGUS backend could not be reached.");
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Attack simulation failed.");
     } finally {
       setLoading(false);
     }
@@ -387,8 +432,8 @@ function App() {
       setIncident(response.incident);
       setAuditEvents(response.audit_events);
       setPhase(6);
-    } catch {
-      setError("Containment approval failed. Check the ARGUS backend and retry.");
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Containment approval failed.");
     } finally {
       setLoading(false);
     }
@@ -417,16 +462,16 @@ function App() {
       },
       {
         phase: 3,
-        time: "15:31:15",
+        time: attack ? formatTime(attack.graph_signal.timestamp) : "--:--:--",
         title: "Graph anomaly detected",
-        detail: "Financial risk 92/100",
+        detail: `Financial risk ${Math.round((attack?.graph_signal.risk_score ?? 0) * 100)}/100`,
         icon: <Network size={15} />,
       },
       {
         phase: 4,
-        time: "15:31:18",
+        time: attack ? formatTime(attack.system_signal.timestamp) : "--:--:--",
         title: "System anomaly detected",
-        detail: "Infrastructure risk 87/100",
+        detail: `Infrastructure risk ${Math.round((attack?.system_signal.risk_score ?? 0) * 100)}/100`,
         icon: <Cpu size={15} />,
       },
       {
@@ -437,8 +482,11 @@ function App() {
         icon: <ShieldAlert size={15} />,
       },
     ],
-    [],
+    [attack],
   );
+
+  const detectorsHealthy = detectorStatus?.graph.availability === "online"
+    && detectorStatus.system.availability === "online";
 
   return (
     <div className={classNames("app-shell", phase >= 5 && phase < 6 && "critical-mode")}>
@@ -451,13 +499,18 @@ function App() {
           </div>
         </div>
         <div className="topbar-center">
-          <span className="system-status"><i /> SYSTEM OPERATIONAL</span>
+          <span className={classNames("system-status", detectorStatus && !detectorsHealthy && "degraded")}>
+            <i /> {detectorsHealthy ? "SYSTEM OPERATIONAL" : detectorStatus ? "DETECTORS DEGRADED" : "CHECKING SERVICES"}
+          </span>
           <span className="environment">SYNTHETIC LAB</span>
         </div>
         <div className="topbar-actions">
           <span className="utc-clock"><Clock3 size={14} /> {utcTime.toISOString().slice(11, 19)} UTC</span>
           <button className="icon-button" onClick={() => void resetDemo()} aria-label="Reset demonstration" disabled={loading}>
             <RefreshCw size={16} className={loading ? "spin" : ""} />
+          </button>
+          <button className="icon-button" onClick={() => void refreshDetectorStatus()} aria-label="Retry detector health checks" disabled={loading} title="Retry detector health checks">
+            <Activity size={16} />
           </button>
         </div>
       </header>
@@ -545,6 +598,7 @@ function App() {
                 score={attack?.graph_signal.risk_score ?? 0}
                 findings={attack?.graph_signal.reasons ?? []}
                 visible={graphVisible}
+                status={detectorStatus?.graph}
               />
               <SignalCard
                 icon={<ServerCog size={19} />}
@@ -553,6 +607,7 @@ function App() {
                 score={attack?.system_signal.risk_score ?? 0}
                 findings={attack?.system_signal.indicators ?? []}
                 visible={systemVisible}
+                status={detectorStatus?.system}
               />
             </div>
           </section>
@@ -612,8 +667,8 @@ function App() {
 
       <footer>
         <span><i /> ARGUS CORE ONLINE</span>
-        <span>GRAPH DETECTOR · {graphVisible ? "ALERT" : "READY"}</span>
-        <span>eBPF SENSOR · {systemVisible ? "ALERT" : "READY"}</span>
+        <span title={detectorStatus?.graph.detail}>GRAPH DETECTOR · {detectorSourceLabel(detectorStatus?.graph)}</span>
+        <span title={detectorStatus?.system.detail}>eBPF SENSOR · {detectorSourceLabel(detectorStatus?.system)}</span>
         <span className="mono">BUILD 0.1.0 · SYNTHETIC DATA</span>
       </footer>
     </div>
