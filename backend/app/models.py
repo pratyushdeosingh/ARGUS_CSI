@@ -6,7 +6,7 @@ JSON Schemas in ``contracts/`` remain the language-neutral source of truth.
 
 from datetime import datetime
 from enum import Enum
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -106,6 +106,13 @@ class AuditEvent(StrictModel):
     result: str
 
 
+class RawTelemetryEvent(StrictModel):
+    timestamp: datetime
+    event_type: Literal["process_exec", "file_open", "network_connect"]
+    process: str
+    details: dict[str, Any] = Field(default_factory=dict)
+
+
 class DetectorComponentStatus(StrictModel):
     availability: Literal["online", "degraded", "offline"]
     origin: Literal["service", "last_known", "fixture", "none"]
@@ -116,3 +123,37 @@ class DetectorComponentStatus(StrictModel):
 class DetectorStatus(StrictModel):
     graph: DetectorComponentStatus
     system: DetectorComponentStatus
+
+
+class AnalysisRequest(StrictModel):
+    transactions: list[Transaction] = Field(min_length=1, max_length=5000)
+    baseline_transactions: list[Transaction] = Field(default_factory=list, max_length=10000)
+    telemetry_events: list[RawTelemetryEvent] = Field(default_factory=list, max_length=5000)
+    system_signal: SystemSignal | None = None
+    correlate_with_latest_system: bool = False
+    telemetry_host: str = Field(default="payment-node-01", min_length=1, max_length=120)
+    telemetry_service: str = Field(default="payment-api", min_length=1, max_length=120)
+    source_label: str = Field(default="api", min_length=1, max_length=80)
+
+
+class AnalysisResponse(StrictModel):
+    analysis_id: str
+    mode: Literal["analysis"] = "analysis"
+    source_label: str
+    transactions: list[Transaction]
+    graph_signal: GraphSignal
+    system_signal: SystemSignal | None
+    detector_status: DetectorStatus
+    incident: Incident | None
+
+
+class PlatformMetrics(StrictModel):
+    transactions_ingested: int
+    signals_analyzed: int
+    incidents_total: int
+    incidents_open: int
+    critical_incidents: int
+    accounts_observed: int
+    total_value_observed: float
+    average_confidence: float
+    severity_counts: dict[str, int]

@@ -1,6 +1,7 @@
 """FastAPI adapter for portable replay and Linux eBPF telemetry."""
 
 import asyncio
+from hashlib import sha256
 import os
 from dataclasses import dataclass, field
 from threading import Lock
@@ -11,7 +12,7 @@ from pydantic import BaseModel
 
 from collector.bpftrace import availability, collect_live
 from collector.replay import collect_replay
-from models import SystemSignal
+from models import SystemSignal, TelemetryAnalysisRequest
 from normalizer import normalize_events
 from signal_builder import build_signal
 
@@ -111,6 +112,25 @@ async def simulate(
     except (RuntimeError, ValueError) as error:
         status_code = 503 if isinstance(error, RuntimeError) else 422
         raise HTTPException(status_code=status_code, detail=str(error)) from error
+
+
+@app.post("/analyze-events", response_model=SystemSignal)
+async def analyze_events(request: TelemetryAnalysisRequest) -> SystemSignal:
+    """Analyze caller-supplied normalized collector records without using fixtures."""
+
+    material = request.model_dump_json()
+    signal_id = f"EBPF-{sha256(material.encode('utf-8')).hexdigest()[:12].upper()}"
+    signal = await asyncio.to_thread(
+        build_signal,
+        normalize_events(request.events),
+        signal_id=signal_id,
+        host=request.host,
+        service=request.service,
+    )
+    with runtime._lock:
+        runtime.latest_signal = signal
+        runtime.detail = "Analyzed caller-supplied telemetry events."
+    return signal
 
 
 @app.get("/signals/latest", response_model=SystemSignal)

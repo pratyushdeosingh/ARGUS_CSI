@@ -10,6 +10,7 @@ import {
   Clock3,
   Cpu,
   Database,
+  FlaskConical,
   Fingerprint,
   LockKeyhole,
   Network,
@@ -27,13 +28,25 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { approveIncident, loadDetectorStatus, loadNormalState, simulateAttack } from "./api";
+import {
+  analyzeData,
+  approveIncident,
+  loadDetectorStatus,
+  loadIncidents,
+  loadNormalState,
+  loadPlatformMetrics,
+  simulateAttack,
+} from "./api";
+import { IntelligenceLab } from "./IntelligenceLab";
 import type {
+  AnalysisRequest,
+  AnalysisResponse,
   AttackResponse,
   AuditEvent,
   DetectorComponentStatus,
   DetectorStatus,
   Incident,
+  PlatformMetrics,
   Transaction,
 } from "./types";
 
@@ -102,10 +115,12 @@ export function detectorSourceLabel(status: DetectorComponentStatus | undefined)
 
 function TransactionGraph({
   transactions,
-  attackActive,
+  suspiciousAccounts,
+  suspiciousTransactions,
 }: {
   transactions: Transaction[];
-  attackActive: boolean;
+  suspiciousAccounts: string[];
+  suspiciousTransactions: string[];
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -124,11 +139,12 @@ function TransactionGraph({
         ]),
       ),
     );
-    const suspicious = new Set(["ACC-101", "ACC-202", "ACC-303", "ACC-404"]);
+    const suspicious = new Set(suspiciousAccounts);
+    const suspiciousEdges = new Set(suspiciousTransactions);
     const elements = [
       ...accountIds.map((account) => ({
         data: { id: account, label: account },
-        classes: attackActive && suspicious.has(account) ? "suspicious" : "normal",
+        classes: suspicious.has(account) ? "suspicious" : "normal",
       })),
       ...transactions.map((transaction) => ({
         data: {
@@ -137,7 +153,7 @@ function TransactionGraph({
           target: transaction.destination_account,
           label: formatCurrency(transaction.amount),
         },
-        classes: attackActive ? "attack-edge" : "normal-edge",
+        classes: suspiciousEdges.has(transaction.transaction_id) ? "attack-edge" : "normal-edge",
       })),
     ];
 
@@ -232,7 +248,7 @@ function TransactionGraph({
       resizeObserver?.disconnect();
       graph?.destroy();
     };
-  }, [attackActive, transactions]);
+  }, [suspiciousAccounts, suspiciousTransactions, transactions]);
 
   return <div className="graph-canvas" ref={containerRef} aria-label="Transaction network graph" />;
 }
@@ -359,6 +375,9 @@ function App() {
   const [incident, setIncident] = useState<Incident | null>(null);
   const [auditEvents, setAuditEvents] = useState<AuditEvent[]>([]);
   const [detectorStatus, setDetectorStatus] = useState<DetectorStatus | null>(null);
+  const [metrics, setMetrics] = useState<PlatformMetrics | null>(null);
+  const [incidentHistory, setIncidentHistory] = useState<Incident[]>([]);
+  const [labOpen, setLabOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [utcTime, setUtcTime] = useState(new Date());
@@ -369,17 +388,30 @@ function App() {
     timersRef.current = [];
   }, []);
 
+  const refreshPlatform = useCallback(async () => {
+    const [nextMetrics, nextIncidents] = await Promise.all([
+      loadPlatformMetrics(),
+      loadIncidents(20),
+    ]);
+    setMetrics(nextMetrics);
+    setIncidentHistory(nextIncidents);
+  }, []);
+
   const resetDemo = useCallback(async () => {
     clearTimers();
     setLoading(true);
     setError(null);
     try {
-      const [response, status] = await Promise.all([
+      const [response, status, nextMetrics, nextIncidents] = await Promise.all([
         loadNormalState(),
         loadDetectorStatus(),
+        loadPlatformMetrics(),
+        loadIncidents(20),
       ]);
       setNormalTransactions(response.transactions);
       setDetectorStatus(status);
+      setMetrics(nextMetrics);
+      setIncidentHistory(nextIncidents);
       setAttack(null);
       setIncident(null);
       setAuditEvents([]);
@@ -422,6 +454,7 @@ function App() {
       setAttack(response);
       setDetectorStatus(response.detector_status);
       setIncident(response.incident);
+      void refreshPlatform();
       setPhase(1);
       [2, 3, 4, 5].forEach((nextPhase, index) => {
         timersRef.current.push(
@@ -435,6 +468,27 @@ function App() {
     }
   };
 
+  const runCustomAnalysis = async (request: AnalysisRequest): Promise<AnalysisResponse> => {
+    clearTimers();
+    const response = await analyzeData(request);
+    setDetectorStatus(response.detector_status);
+    setAuditEvents([]);
+    if (response.system_signal && response.incident) {
+      setAttack({
+        mode: "attack",
+        transactions: response.transactions,
+        graph_signal: response.graph_signal,
+        system_signal: response.system_signal,
+        detector_status: response.detector_status,
+        incident: response.incident,
+      });
+      setIncident(response.incident);
+      setPhase(5);
+    }
+    await refreshPlatform();
+    return response;
+  };
+
   const approve = async () => {
     if (!incident) return;
     setLoading(true);
@@ -444,6 +498,7 @@ function App() {
       setIncident(response.incident);
       setAuditEvents(response.audit_events);
       setPhase(6);
+      await refreshPlatform();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Containment approval failed.");
     } finally {
@@ -455,21 +510,25 @@ function App() {
   const graphVisible = phase >= 3 && attack !== null;
   const systemVisible = phase >= 4 && attack !== null;
   const attackTotal = attack?.transactions.reduce((sum, transaction) => sum + transaction.amount, 0) ?? 0;
+  const suspiciousAccounts = attack?.graph_signal.suspicious_accounts ?? [];
+  const suspiciousTransactions = attack?.graph_signal.suspicious_transactions ?? [];
+  const originAccount = attack?.transactions[0]?.source_account ?? "—";
+  const deviceId = attack?.transactions[0]?.device_id ?? "—";
 
   const timeline = useMemo(
     () => [
       {
         phase: 1,
-        time: "15:30:00",
+        time: attack ? formatTime(attack.transactions[0]?.timestamp ?? attack.graph_signal.timestamp) : "--:--:--",
         title: "New device session",
-        detail: "DEV-99 · 185.220.101.10",
+        detail: attack ? `${attack.transactions[0]?.device_id ?? "Unknown device"} · ${attack.transactions[0]?.ip_address ?? "Unknown IP"}` : "Awaiting data",
         icon: <Fingerprint size={15} />,
       },
       {
         phase: 2,
-        time: "15:30:40",
-        title: "Rapid mule transfers",
-        detail: "ACC-101 → ACC-202 → ACC-303",
+        time: attack ? formatTime(attack.transactions.at(-1)?.timestamp ?? attack.graph_signal.timestamp) : "--:--:--",
+        title: humanize(attack?.graph_signal.anomaly_type ?? "Transaction sequence"),
+        detail: suspiciousAccounts.slice(0, 4).join(" → ") || "Awaiting graph analysis",
         icon: <Zap size={15} />,
       },
       {
@@ -488,13 +547,13 @@ function App() {
       },
       {
         phase: 5,
-        time: "15:31:20",
+        time: incident ? formatTime(incident.timestamp) : "--:--:--",
         title: "Signals correlated",
-        detail: "Critical incident INC-001",
+        detail: incident ? `${humanize(incident.severity)} incident ${incident.incident_id}` : "Awaiting correlation",
         icon: <ShieldAlert size={15} />,
       },
     ],
-    [attack],
+    [attack, incident, suspiciousAccounts],
   );
 
   const detectorsHealthy = detectorStatus?.graph.availability === "online"
@@ -514,7 +573,7 @@ function App() {
           <span className={classNames("system-status", detectorStatus && !detectorsHealthy && "degraded")}>
             <i /> {detectorsHealthy ? "SYSTEM OPERATIONAL" : detectorStatus ? "DETECTORS DEGRADED" : "CHECKING SERVICES"}
           </span>
-          <span className="environment">SYNTHETIC LAB</span>
+          <span className="environment">LIVE INTELLIGENCE · SAFE LAB</span>
         </div>
         <div className="topbar-actions">
           <span className="utc-clock"><Clock3 size={14} /> {utcTime.toISOString().slice(11, 19)} UTC</span>
@@ -547,14 +606,19 @@ function App() {
             </div>
           </div>
           <div className="command-stats">
-            <div><span>Accounts monitored</span><strong>2,418</strong></div>
-            <div><span>Transactions / min</span><strong>{phase >= 2 && phase < 6 ? "184" : "126"}</strong></div>
-            <div><span>Active incidents</span><strong className={phase >= 5 && phase < 6 ? "danger-text" : ""}>{phase >= 5 && phase < 6 ? "01" : "00"}</strong></div>
+            <div><span>Accounts observed</span><strong>{metrics?.accounts_observed.toLocaleString() ?? "—"}</strong></div>
+            <div><span>Transactions ingested</span><strong>{metrics?.transactions_ingested.toLocaleString() ?? "—"}</strong></div>
+            <div><span>Open incidents</span><strong className={(metrics?.incidents_open ?? 0) > 0 ? "danger-text" : ""}>{metrics?.incidents_open.toLocaleString() ?? "—"}</strong></div>
           </div>
-          <button className="simulate-button" onClick={() => void startAttack()} disabled={loading || (phase > 0 && phase < 6)}>
-            {loading ? <RefreshCw size={17} className="spin" /> : <Play size={17} fill="currentColor" />}
-            {phase === 0 || phase === 6 ? "SIMULATE ATTACK" : "ATTACK IN PROGRESS"}
-          </button>
+          <div className="command-actions">
+            <button className="lab-button" onClick={() => setLabOpen(true)}>
+              <FlaskConical size={17} /> DATA LAB
+            </button>
+            <button className="simulate-button" onClick={() => void startAttack()} disabled={loading || (phase > 0 && phase < 6)}>
+              {loading ? <RefreshCw size={17} className="spin" /> : <Play size={17} fill="currentColor" />}
+              {phase === 0 || phase === 6 ? "CANONICAL DEMO" : "ANALYSIS ACTIVE"}
+            </button>
+          </div>
         </section>
 
         <section className="dashboard-grid">
@@ -583,9 +647,9 @@ function App() {
                 <div><span className="eyebrow">AT-RISK VALUE</span><h2>{formatCurrency(phase >= 2 ? attackTotal : 0)}</h2></div>
                 <Database size={18} />
               </div>
-              <div className="asset-row"><span>Origin account</span><strong>{phase >= 1 ? "ACC-101" : "—"}</strong></div>
-              <div className="asset-row"><span>Pending transfer</span><strong>{phase >= 2 && phase < 6 ? "1" : "0"}</strong></div>
-              <div className="asset-row"><span>Mule accounts</span><strong>{phase >= 2 ? "3" : "0"}</strong></div>
+              <div className="asset-row"><span>Origin account</span><strong>{phase >= 1 ? originAccount : "—"}</strong></div>
+              <div className="asset-row"><span>Suspicious transfers</span><strong>{phase >= 2 ? suspiciousTransactions.length : "0"}</strong></div>
+              <div className="asset-row"><span>Affected accounts</span><strong>{phase >= 2 ? suspiciousAccounts.length : "0"}</strong></div>
             </section>
           </aside>
 
@@ -595,9 +659,13 @@ function App() {
                 <div><span className="eyebrow">FINANCIAL INTELLIGENCE</span><h2>Transaction network</h2></div>
                 <div className="graph-legend"><span><i className="normal-node" /> Normal</span><span><i className="risk-node" /> Suspicious</span></div>
               </div>
-              <TransactionGraph transactions={visibleTransactions} attackActive={phase >= 2 && phase < 6} />
+              <TransactionGraph
+                transactions={visibleTransactions}
+                suspiciousAccounts={phase >= 2 && phase < 6 ? suspiciousAccounts : []}
+                suspiciousTransactions={phase >= 2 && phase < 6 ? suspiciousTransactions : []}
+              />
               <div className="graph-footnote">
-                <span><Wifi size={14} /> {phase >= 1 ? "New device: DEV-99" : "Known devices only"}</span>
+                <span><Wifi size={14} /> {phase >= 1 ? `Observed device: ${deviceId}` : "Known devices only"}</span>
                 <span><Network size={14} /> {phase >= 2 ? `${visibleTransactions.length} linked transfers` : "No unusual paths"}</span>
               </div>
             </section>
@@ -645,10 +713,13 @@ function App() {
                       </div>
                     ))}
                   </div>
-                  {phase === 5 && (
+                  {phase === 5 && incident.status === "awaiting_approval" && (
                     <button className="approve-button" onClick={() => void approve()} disabled={loading}>
                       <UserCheck size={17} /> APPROVE CONTAINMENT <ChevronRight size={16} />
                     </button>
+                  )}
+                  {phase === 5 && incident.status === "monitoring" && (
+                    <div className="monitoring-banner"><Radar size={17} /> Monitoring policy active · no destructive action required</div>
                   )}
                   {phase === 6 && <div className="contained-banner"><ShieldCheck size={17} /> Containment executed successfully</div>}
                 </>
@@ -681,8 +752,15 @@ function App() {
         <span><i /> ARGUS CORE ONLINE</span>
         <span title={detectorStatus?.graph.detail}>GRAPH DETECTOR · {detectorSourceLabel(detectorStatus?.graph)}</span>
         <span title={detectorStatus?.system.detail}>eBPF SENSOR · {detectorSourceLabel(detectorStatus?.system)}</span>
-        <span className="mono">BUILD 0.1.0 · SYNTHETIC DATA</span>
+        <span className="mono">BUILD 1.0.0 · DATA-DRIVEN</span>
       </footer>
+
+      <IntelligenceLab
+        open={labOpen}
+        incidents={incidentHistory}
+        onClose={() => setLabOpen(false)}
+        onAnalyze={runCustomAnalysis}
+      />
     </div>
   );
 }

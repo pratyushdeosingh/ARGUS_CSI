@@ -44,6 +44,9 @@ services:
       GRAPH_DETECTOR_URL: http://graph-detector:8001
       EBPF_DETECTOR_URL: http://ebpf-detector:8002
       DETECTOR_TIMEOUT_SECONDS: ${DETECTOR_TIMEOUT_SECONDS:-5}
+      ARGUS_DB_PATH: /workspace/runtime/argus.db
+    volumes:
+      - argus-runtime:/workspace/runtime
     depends_on:
       graph-detector:
         condition: service_healthy
@@ -75,3 +78,6 @@ services:
 # Live eBPF collection requires Linux-specific privileges. The full Compose
 # demo therefore uses deterministic, sanitized replay telemetry; run the eBPF
 # service directly on a Linux host to demonstrate live collection.
+
+volumes:
+  argus-runtime:

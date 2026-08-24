@@ -2,6 +2,7 @@
 
 from datetime import UTC
 from hashlib import sha256
+from threading import RLock
 
 from features import Evidence, extract_evidence
 from graph_builder import active_transactions, build_graph
@@ -50,14 +51,33 @@ def _signal_id(transactions: list[Transaction]) -> str:
 
 
 class GraphDetector:
-    """Stateless analyzer with an immutable behavioral reference window."""
+    """Analyzer with a replaceable, thread-safe behavioral reference window."""
 
     def __init__(self, baseline_transactions: list[Transaction] | None = None):
-        self.baseline_transactions = list(baseline_transactions or [])
+        self._lock = RLock()
+        self._baseline_transactions = list(baseline_transactions or [])
 
-    def analyze(self, transactions: list[Transaction]) -> GraphSignal:
+    @property
+    def baseline_transactions(self) -> list[Transaction]:
+        with self._lock:
+            return list(self._baseline_transactions)
+
+    def replace_baseline(self, transactions: list[Transaction]) -> None:
+        with self._lock:
+            self._baseline_transactions = list(transactions)
+
+    def analyze(
+        self,
+        transactions: list[Transaction],
+        baseline_transactions: list[Transaction] | None = None,
+    ) -> GraphSignal:
         graph = build_graph(transactions)
-        evidence = extract_evidence(transactions, self.baseline_transactions, graph)
+        baseline = (
+            self.baseline_transactions
+            if baseline_transactions is None
+            else list(baseline_transactions)
+        )
+        evidence = extract_evidence(transactions, baseline, graph)
         score = _risk_score(evidence)
         active = active_transactions(transactions)
         timestamp = max((item.timestamp for item in active), default=None)

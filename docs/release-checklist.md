@@ -17,11 +17,13 @@ Use this checklist before a demo, release, or merge to `main`.
 - Run `python -m backend.app.integration_check` when starting services manually.
 - Trigger the canonical attack and confirm incident `INC-001` is critical.
 - Approve containment and confirm exactly three simulated actions enter the audit log.
+- Run the Data Lab fan-out and clean-control starters; confirm their content-derived IDs and outcomes differ.
+- Restart the backend and confirm incident history remains available from SQLite.
 
 ## Demo integrity
 
-- Use only the synthetic fixtures under `data/`.
-- Keep the canonical account, device, host, process, and IP identifiers unchanged.
+- Use only synthetic fixtures or non-sensitive Data Lab inputs.
+- Keep canonical identifiers unchanged when presenting the deterministic canonical path.
 - Never describe fixture or replay results as live telemetry.
 - Never connect containment actions to a real account, service, or network control.
 - Keep critical actions behind explicit analyst approval.

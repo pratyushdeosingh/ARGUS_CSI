@@ -8,6 +8,8 @@ from fastapi import FastAPI
 
 from detector import GraphDetector
 from graph_models import (
+    BaselineResponse,
+    ContextualAnalysisRequest,
     GraphSignal,
     HealthResponse,
     Transaction,
@@ -49,9 +51,44 @@ def health() -> HealthResponse:
     )
 
 
+def _baseline_response() -> BaselineResponse:
+    baseline = detector.baseline_transactions
+    accounts = {
+        account
+        for item in baseline
+        for account in (item.source_account, item.destination_account)
+    }
+    return BaselineResponse(
+        status="ready",
+        baseline_transactions=len(baseline),
+        accounts_profiled=len(accounts),
+        currencies_profiled=sorted({item.currency for item in baseline}),
+    )
+
+
+@app.get("/baseline", response_model=BaselineResponse)
+def baseline_status() -> BaselineResponse:
+    return _baseline_response()
+
+
+@app.post("/baseline/train", response_model=BaselineResponse)
+def train_baseline(batch: TransactionBatch) -> BaselineResponse:
+    """Replace the behavioral reference window with caller-supplied history."""
+
+    detector.replace_baseline(batch.root)
+    return _baseline_response()
+
+
 @app.post("/analyze", response_model=GraphSignal)
 def analyze(batch: TransactionBatch) -> GraphSignal:
     return detector.analyze(batch.root)
+
+
+@app.post("/analyze-context", response_model=GraphSignal)
+def analyze_context(request: ContextualAnalysisRequest) -> GraphSignal:
+    """Analyze against a request-scoped baseline without mutating global state."""
+
+    return detector.analyze(request.transactions, request.baseline_transactions)
 
 
 @app.post("/visualize", response_model=VisualizationResponse)

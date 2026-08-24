@@ -10,6 +10,7 @@ from .models import (
     DetectorComponentStatus,
     DetectorStatus,
     GraphSignal,
+    RawTelemetryEvent,
     SystemSignal,
     Transaction,
 )
@@ -54,6 +55,96 @@ class DetectorGateway:
         system, system_status = self._resolve_system(system_result)
         return graph, system, DetectorStatus(graph=graph_status, system=system_status)
 
+    async def analyze_payload(
+        self,
+        transactions: list[Transaction],
+        *,
+        baseline_transactions: list[Transaction] | None = None,
+        telemetry_events: list[RawTelemetryEvent] | None = None,
+        supplied_system_signal: SystemSignal | None = None,
+        correlate_with_latest_system: bool = False,
+        telemetry_host: str = "payment-node-01",
+        telemetry_service: str = "payment-api",
+    ) -> tuple[GraphSignal, SystemSignal | None, DetectorStatus]:
+        """Analyze caller data without ever substituting canonical fixtures."""
+
+        if self.settings.detector_mode == "fixture":
+            raise DetectorUnavailable(
+                "Arbitrary analysis is unavailable in fixture mode. Start the detector services."
+            )
+
+        timeout = httpx.Timeout(self.settings.detector_timeout_seconds)
+        async with httpx.AsyncClient(timeout=timeout, transport=self.transport) as client:
+            try:
+                graph = await self._fetch_graph(
+                    client,
+                    transactions,
+                    baseline_transactions=baseline_transactions,
+                )
+            except Exception as error:
+                raise DetectorUnavailable(
+                    f"Graph detector could not analyze this batch: {self._error_detail(error)}"
+                ) from error
+
+            graph_status = DetectorComponentStatus(
+                availability="online",
+                origin="service",
+                detail="Graph detector analyzed caller-supplied transactions.",
+            )
+            self.state.last_graph_signal = graph
+
+            system: SystemSignal | None = None
+            if supplied_system_signal is not None:
+                system = supplied_system_signal
+                system_status = DetectorComponentStatus(
+                    availability="online",
+                    origin="service",
+                    mode="unknown",
+                    detail="Contract-valid infrastructure signal supplied by the caller.",
+                )
+            elif telemetry_events:
+                try:
+                    system = await self._fetch_telemetry(
+                        client,
+                        telemetry_events,
+                        host=telemetry_host,
+                        service=telemetry_service,
+                    )
+                except Exception as error:
+                    raise DetectorUnavailable(
+                        f"eBPF detector could not analyze telemetry: {self._error_detail(error)}"
+                    ) from error
+                system_status = DetectorComponentStatus(
+                    availability="online",
+                    origin="service",
+                    mode="unknown",
+                    detail="eBPF detector analyzed caller-supplied telemetry.",
+                )
+            elif correlate_with_latest_system:
+                try:
+                    system = await self._fetch_latest_system(client)
+                except Exception as error:
+                    raise DetectorUnavailable(
+                        f"No usable latest infrastructure signal: {self._error_detail(error)}"
+                    ) from error
+                system_status = DetectorComponentStatus(
+                    availability="online",
+                    origin="service",
+                    mode="unknown",
+                    detail="Correlated with the detector's latest infrastructure signal.",
+                )
+            else:
+                system_status = DetectorComponentStatus(
+                    availability="offline",
+                    origin="none",
+                    mode="unknown",
+                    detail="No infrastructure telemetry was supplied; graph-only analysis completed.",
+                )
+
+        if system is not None:
+            self.state.last_system_signal = system
+        return graph, system, DetectorStatus(graph=graph_status, system=system_status)
+
     async def status(self) -> DetectorStatus:
         if self.settings.detector_mode == "fixture":
             return DetectorStatus(
@@ -74,8 +165,26 @@ class DetectorGateway:
         )
 
     async def _fetch_graph(
-        self, client: httpx.AsyncClient, transactions: list[Transaction]
+        self,
+        client: httpx.AsyncClient,
+        transactions: list[Transaction],
+        baseline_transactions: list[Transaction] | None = None,
     ) -> GraphSignal:
+        if baseline_transactions:
+            response = await client.post(
+                f"{self.settings.graph_detector_url}/analyze-context",
+                json={
+                    "transactions": [
+                        transaction.model_dump(mode="json") for transaction in transactions
+                    ],
+                    "baseline_transactions": [
+                        transaction.model_dump(mode="json")
+                        for transaction in baseline_transactions
+                    ],
+                },
+            )
+            response.raise_for_status()
+            return GraphSignal.model_validate(response.json())
         response = await client.post(
             f"{self.settings.graph_detector_url}/analyze",
             json=[transaction.model_dump(mode="json") for transaction in transactions],
@@ -98,6 +207,30 @@ class DetectorGateway:
         response = await client.get(f"{self.settings.ebpf_detector_url}/signals/latest")
         response.raise_for_status()
         return SystemSignal.model_validate(response.json()), reported_mode
+
+    async def _fetch_telemetry(
+        self,
+        client: httpx.AsyncClient,
+        events: list[RawTelemetryEvent],
+        *,
+        host: str,
+        service: str,
+    ) -> SystemSignal:
+        response = await client.post(
+            f"{self.settings.ebpf_detector_url}/analyze-events",
+            json={
+                "events": [event.model_dump(mode="json") for event in events],
+                "host": host,
+                "service": service,
+            },
+        )
+        response.raise_for_status()
+        return SystemSignal.model_validate(response.json())
+
+    async def _fetch_latest_system(self, client: httpx.AsyncClient) -> SystemSignal:
+        response = await client.get(f"{self.settings.ebpf_detector_url}/signals/latest")
+        response.raise_for_status()
+        return SystemSignal.model_validate(response.json())
 
     async def _probe(self, client: httpx.AsyncClient, base_url: str) -> dict[str, Any]:
         response = await client.get(f"{base_url}/health")

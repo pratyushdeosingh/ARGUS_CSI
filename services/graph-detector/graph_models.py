@@ -66,6 +66,18 @@ class HealthResponse(StrictModel):
     baseline_transactions: int = Field(ge=0)
 
 
+class BaselineResponse(StrictModel):
+    status: str
+    baseline_transactions: int = Field(ge=0)
+    accounts_profiled: int = Field(ge=0)
+    currencies_profiled: list[str]
+
+
+class ContextualAnalysisRequest(StrictModel):
+    transactions: list[Transaction] = Field(min_length=1, max_length=5000)
+    baseline_transactions: list[Transaction] = Field(min_length=1, max_length=10000)
+
+
 class VisualizationNodeData(StrictModel):
     id: str
     label: str

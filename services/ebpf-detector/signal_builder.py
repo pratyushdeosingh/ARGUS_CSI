@@ -11,6 +11,9 @@ def build_signal(
     events: list[NormalizedEvent],
     *,
     signal_id: str = "EBPF-001",
+    host: str = "payment-node-01",
+    service: str = "payment-api",
+    process: str | None = None,
 ) -> SystemSignal:
     suspicious = [event for event in events if event.suspicious]
     timestamp = max(
@@ -39,9 +42,9 @@ def build_signal(
         signal_id=signal_id,
         timestamp=timestamp,
         risk_score=score_events(events),
-        host="payment-node-01",
-        service="payment-api",
-        process=CANONICAL_PROCESS,
+        host=host,
+        service=service,
+        process=process or (events[0].process if events else CANONICAL_PROCESS),
         event_type=event_type,
         related_ips=related_ips,
         indicators=indicators,

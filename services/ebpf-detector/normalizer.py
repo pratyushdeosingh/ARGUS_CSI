@@ -46,7 +46,7 @@ def normalize_event(event: RawEvent) -> NormalizedEvent:
         indicator=(
             "Connection to suspicious external IP" if suspicious else None
         ),
-        related_ip=CANONICAL_SUSPICIOUS_IP if suspicious else destination or None,
+        related_ip=destination or (CANONICAL_SUSPICIOUS_IP if suspicious else None),
     )
 
 

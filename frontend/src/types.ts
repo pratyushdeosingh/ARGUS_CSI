@@ -37,6 +37,13 @@ export interface SystemSignal {
   indicators: string[];
 }
 
+export interface RawTelemetryEvent {
+  timestamp: string;
+  event_type: "process_exec" | "file_open" | "network_connect";
+  process: string;
+  details: Record<string, unknown>;
+}
+
 export interface ResponseAction {
   action: string;
   target: string;
@@ -101,4 +108,38 @@ export interface AttackResponse {
 export interface ApprovalResponse {
   incident: Incident;
   audit_events: AuditEvent[];
+}
+
+export interface AnalysisRequest {
+  transactions: Transaction[];
+  baseline_transactions?: Transaction[];
+  telemetry_events?: RawTelemetryEvent[];
+  system_signal?: SystemSignal;
+  correlate_with_latest_system?: boolean;
+  telemetry_host?: string;
+  telemetry_service?: string;
+  source_label?: string;
+}
+
+export interface AnalysisResponse {
+  analysis_id: string;
+  mode: "analysis";
+  source_label: string;
+  transactions: Transaction[];
+  graph_signal: GraphSignal;
+  system_signal: SystemSignal | null;
+  detector_status: DetectorStatus;
+  incident: Incident | null;
+}
+
+export interface PlatformMetrics {
+  transactions_ingested: number;
+  signals_analyzed: number;
+  incidents_total: number;
+  incidents_open: number;
+  critical_incidents: number;
+  accounts_observed: number;
+  total_value_observed: number;
+  average_confidence: number;
+  severity_counts: Record<string, number>;
 }

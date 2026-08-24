@@ -1,8 +1,12 @@
 import type {
   ApprovalResponse,
+  AnalysisRequest,
+  AnalysisResponse,
   AttackResponse,
   DetectorStatus,
+  Incident,
   NormalResponse,
+  PlatformMetrics,
 } from "./types";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "http://127.0.0.1:8000";
@@ -41,4 +45,20 @@ export function approveIncident(incidentId: string): Promise<ApprovalResponse> {
   return request<ApprovalResponse>(`/api/incidents/${incidentId}/approve`, {
     method: "POST",
   });
+}
+
+export function analyzeData(payload: AnalysisRequest): Promise<AnalysisResponse> {
+  return request<AnalysisResponse>("/api/analyze", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+export function loadPlatformMetrics(): Promise<PlatformMetrics> {
+  return request<PlatformMetrics>("/api/platform/metrics");
+}
+
+export function loadIncidents(limit = 20): Promise<Incident[]> {
+  return request<Incident[]>(`/api/incidents?limit=${limit}`);
 }

@@ -19,6 +19,12 @@ class RawEvent(StrictModel):
     details: dict[str, Any] = Field(default_factory=dict)
 
 
+class TelemetryAnalysisRequest(StrictModel):
+    events: list[RawEvent] = Field(min_length=1, max_length=5000)
+    host: str = "payment-node-01"
+    service: str = "payment-api"
+
+
 class NormalizedEvent(StrictModel):
     timestamp: datetime
     category: Literal["process", "file", "network"]
