@@ -5,3 +5,5 @@ networkx==3.5
 pydantic==2.11.7
 pytest==8.4.1
 uvicorn[standard]==0.35.0
+torch
+numpy

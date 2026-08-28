@@ -95,3 +95,21 @@ orchestrator to correlate the graph finding with the infrastructure signal.
 The analyzer is stateless: identical batches and the same baseline always
 produce the same signal ID and score. This avoids demo drift and makes retries
 safe.
+
+## Temporal Graph Neural Network (TGNN)
+
+To complement the hand-crafted rule-based detector, this service integrates a lightweight Temporal Graph Neural Network (TGNN) built in PyTorch (CPU-compatible).
+
+### How it works:
+- **Node Representation**: A node represents a unique bank account involved in the transaction batch. Initial node features are constructed from the batch context: log of total amount sent/received and counts of outgoing/incoming transfers.
+- **Edge Representation**: An edge represents an active, non-cancelled transaction between two accounts, carrying transaction amount, currency, and timestamp attributes.
+- **Linear Projection**: Initial node features are projected to a hidden representation (8-dimensional space) using a learnable linear layer.
+- **Message Passing**: Each node aggregates representations from its connected neighboring nodes (predecessors and successors in the transaction graph) via average aggregation, propagating structural flow information.
+- **Combine & Non-linear Transformation**: The node's own representation and the aggregated neighbor message are concatenated and passed through a linear layer with a ReLU activation.
+- **Temporal Update**: Transactions in the batch are processed in chronological order. A GRUCell updates the recurrent state of the source and destination nodes at each transaction, incorporating the time-delta between consecutive events, transaction amount, and the counterpart's hidden state.
+- **Anomaly Output**: Node embeddings are projected via a linear layer with a Sigmoid activation to individual account risk scores. The overall batch TGNN score is the maximum of these individual node risk scores.
+
+### Integration in the Pipeline:
+The TGNN is evaluated inside [GraphDetector.analyze](file:///Users/pratham/Desktop/ARGUS_CSI/services/graph-detector/detector.py#L52-L109) alongside the rule-based features. The final `risk_score` is the maximum of the hand-crafted rule score and the TGNN score:
+$$\text{risk\_score} = \max(\text{rule\_score}, \text{tgnn\_score})$$
+If the TGNN score is elevated ($\ge 0.25$), it adds an explanatory message to the `reasons` list and flags the highest-risk node in `suspicious_accounts`, preserving the strict contract schema of the `GraphSignal`.
