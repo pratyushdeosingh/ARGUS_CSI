@@ -291,3 +291,5 @@ The product value comes from the integration: neither detector alone declares a 
 - This prototype demonstrates cross-domain reasoning and human governance; it does not claim to replace bank fraud, SIEM, or incident-response platforms.
 
 For guarded live Linux collection, read [`services/ebpf-detector/SETUP_LINUX.md`](services/ebpf-detector/SETUP_LINUX.md). Before a presentation, use [`docs/release-checklist.md`](docs/release-checklist.md) and [`docs/demo-script.md`](docs/demo-script.md).
+
+congrats you read the whole readme -Nitin
