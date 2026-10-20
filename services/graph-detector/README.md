@@ -113,3 +113,86 @@ To complement the hand-crafted rule-based detector, this service integrates a li
 The TGNN is evaluated inside [GraphDetector.analyze](file:///Users/pratham/Desktop/ARGUS_CSI/services/graph-detector/detector.py#L52-L109) alongside the rule-based features. The final `risk_score` is the maximum of the hand-crafted rule score and the TGNN score:
 $$\text{risk\_score} = \max(\text{rule\_score}, \text{tgnn\_score})$$
 If the TGNN score is elevated ($\ge 0.25$), it adds an explanatory message to the `reasons` list and flags the highest-risk node in `suspicious_accounts`, preserving the strict contract schema of the `GraphSignal`.
+
+---
+
+## 2026 Update: Real-Time Transaction Scoring & Unified Risk Engine
+
+ARGUS CSI now includes a modular, real-time transaction detection system that evaluates transactions individually against rolling customer state, dedicated mule behavioral analysis, scam heuristics, and the underlying TGNN.
+
+### Architecture Pipeline:
+
+```text
+TRANSACTION INPUT (POST /score-transaction)
+                   │
+                   ▼
+       FEATURE EXTRACTION & STATE
+       (AccountHistoryStore Sliding Window)
+                   │
+      ┌────────────┼────────────┬────────────┐
+      ▼            ▼            ▼            ▼
+RULE DETECTOR     TGNN     MULE DETECTOR  SCAM DETECTOR
+  (0-100)        (0-100)      (0-100)        (0-100)
+      │            │            │            │
+      └────────────┼────────────┴────────────┘
+                   │
+                   ▼
+         UNIFIED RISK AGGREGATOR
+     (Peak + Balanced + Corroboration)
+                   │
+                   ▼
+           FINAL RISK SCORE (0-100)
+                   │
+                   ▼
+       RISK BAND & DECISION
+       • LOW      (0-29)   --> ALLOW
+       • MODERATE (30-59)  --> REVIEW
+       • HIGH     (60-79)  --> REVIEW / BLOCK
+       • SEVERE   (80-100) --> BLOCK
+                   │
+                   ▼
+         GROUNDED EXPLAINABLE AI
+```
+
+### Components:
+
+1. **Stateful History Layer (`history.py`)**:
+   - `BaseHistoryStore` abstract protocol with in-memory thread-safe `InMemoryHistoryStore`.
+   - Maintains circular buffer of recent transactions, subgraphs, distinct counterparties, velocity, and volume turnover.
+   - Modular design allows drop-in replacement with Redis or PostgreSQL.
+
+2. **Dedicated Mule Detector (`mule_detector.py`)**:
+   - Evaluates:
+     - Fan-in score (weight 0.25): distinct senders to one recipient
+     - Forwarding speed score (weight 0.25): duration between fund arrival and onward transfer
+     - Turnover score (weight 0.20): ratio of forwarded vs received funds
+     - Counterparty diversity score (weight 0.15): unique vs repeat counterparty ratio
+     - Temporal burst score (weight 0.15): clustering of inflows and outflows
+   - Produces 0-100 score and grounded explanations (e.g., `"Account ACC-MULE-501 received funds from 4 distinct senders and forwarded 95% within 2 minutes."`).
+
+3. **Dedicated Scam Detector (`scam_detector.py`)**:
+   - Evaluates:
+     - Fan-out score (weight 0.30): burst of outgoing transfers to new counterparties
+     - Velocity burst score (weight 0.25): high frequency in short window
+     - Repeated amounts score (weight 0.20): structured transfers of identical amount
+     - Volume surge score (weight 0.15): ratio vs account baseline median
+     - Temporal cluster score (weight 0.10): seconds between successive payments
+   - Produces 0-100 score and grounded explanations.
+
+4. **Unified Risk Engine (`engine.py`)**:
+   - Synthesizes all 4 detector outputs: Rules, TGNN, Mule, and Scam.
+   - Applies peak-signal preservation (so critical fraud alerts aren't diluted) and multi-detector corroboration bonus.
+   - Maps scores deterministically to `ALLOW`, `REVIEW`, or `BLOCK`.
+
+5. **Deterministic Scenarios (`scenarios.py`)**:
+   - `normal`: Low-frequency baseline transaction (`ALLOW`)
+   - `high_value_fraud`: Extreme volume surge >80x normal (`BLOCK`)
+   - `rapid_forwarding`: A -> B -> C within 45s (`BLOCK`)
+   - `mule_account`: Multi-inflow fan-in + pass-through (`BLOCK`)
+   - `scam_fan_out`: Rapid outgoing dispersal to 5 new payees (`BLOCK`)
+   - `suspicious_burst`: 4 identical transfers in 60s (`BLOCK`)
+
+6. **Interactive Demo UI**:
+   - Available directly at `http://127.0.0.1:8001/` or `http://127.0.0.1:8001/demo`.
+   - Allows instant one-click scenario testing, custom transaction scoring, real-time Cytoscape graph rendering, risk gauge display, detector breakdown bars, and explainable AI reasons.
+
