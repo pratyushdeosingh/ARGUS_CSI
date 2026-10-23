@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
 import json
 import os
-import sqlite3
 from pathlib import Path
+import sqlite3
 from threading import RLock
 
 from .models import (
@@ -281,7 +282,20 @@ class ArgusStore:
             severity_counts={row["severity"]: row["count"] for row in severity_rows},
         )
 
-    def ingest_transaction(self, item: Transaction) -> IngestionStatus:
+    def ingest_transaction(
+        self, item: Transaction, batch_id: str | None = None
+    ) -> IngestionStatus:
+        if batch_id is None:
+            effective_batch = (
+                item.transaction_id.rsplit("-", 1)[0]
+                if "-" in item.transaction_id
+                else "INGESTED"
+            )
+        else:
+            effective_batch = batch_id
+
+        ts_str = item.timestamp.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
         with self._lock, self._connect() as connection:
             existing = connection.execute(
                 "SELECT payload FROM transaction_events WHERE transaction_id = ?",
@@ -306,8 +320,8 @@ class ArgusStore:
                     """,
                     (
                         item.transaction_id,
-                        "INGESTED",
-                        item.timestamp.isoformat(),
+                        effective_batch,
+                        ts_str,
                         item.source_account,
                         item.destination_account,
                         item.amount,
@@ -331,6 +345,39 @@ class ArgusStore:
                 raise IngestionConflictError(
                     f"Transaction '{item.transaction_id}' already exists with different transaction data"
                 )
+
+    def get_recent_transactions_window(
+        self,
+        end_timestamp: datetime,
+        window_minutes: int = 15,
+        max_count: int = 100,
+        batch_id: str | None = None,
+    ) -> list[Transaction]:
+        """Retrieve recent transactions within a bounded time window up to end_timestamp.
+
+        Sorted chronologically (timestamp ASC, transaction_id ASC).
+        """
+        start_timestamp = end_timestamp - timedelta(minutes=window_minutes)
+        start_str = start_timestamp.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        end_str = end_timestamp.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+        query = """
+            SELECT payload FROM transaction_events
+            WHERE timestamp >= ? AND timestamp <= ?
+        """
+        params: list[object] = [start_str, end_str]
+        if batch_id is not None:
+            query += " AND batch_id = ?"
+            params.append(batch_id)
+
+        query += " ORDER BY timestamp ASC, transaction_id ASC LIMIT ?"
+        params.append(max_count)
+
+        with self._lock, self._connect() as connection:
+            rows = connection.execute(query, params).fetchall()
+
+        return [Transaction.model_validate_json(row["payload"]) for row in rows]
+
 
     def get_transaction(self, transaction_id: str) -> Transaction | None:
         with self._lock, self._connect() as connection:

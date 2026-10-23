@@ -1,8 +1,22 @@
 """FastAPI entry point for the ARGUS orchestration prototype."""
 
-from fastapi import Depends, FastAPI, HTTPException, Query, Response, status
+import asyncio
+import logging
+
+from fastapi import (
+    Depends,
+    FastAPI,
+    Header,
+    HTTPException,
+    Query,
+    Response,
+    WebSocket,
+    WebSocketDisconnect,
+    status,
+)
 from fastapi.middleware.cors import CORSMiddleware
 
+from .config import Settings, get_settings
 from .correlation import correlate
 from .detectors import DetectorGateway, DetectorUnavailable, get_detector_gateway
 from .models import (
@@ -25,7 +39,14 @@ from .simulator import (
 )
 from .state import demo_state
 from .storage import ArgusStore, IngestionConflictError, argus_store, get_argus_store
+from .websocket_manager import (
+    WebSocketManager,
+    create_stream_event,
+    get_websocket_manager,
+)
 
+
+logger = logging.getLogger("argus.api")
 
 app = FastAPI(
     title="ARGUS Orchestration API",
@@ -48,6 +69,28 @@ app.add_middleware(
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.websocket("/ws/transactions")
+async def websocket_transactions(
+    websocket: WebSocket,
+    manager: WebSocketManager = Depends(get_websocket_manager),
+) -> None:
+    """Real-time WebSocket endpoint for transaction ingestion and fraud alerts."""
+    await manager.connect(websocket)
+    welcome_event = create_stream_event(
+        event_type="connection.established",
+        data={
+            "message": "Connected to ARGUS real-time transaction stream",
+            "status": "online",
+        },
+    )
+    await manager.send_personal(websocket, welcome_event)
+    try:
+        while True:
+            await websocket.receive_text()
+    except (WebSocketDisconnect, Exception):
+        await manager.disconnect(websocket)
 
 
 @app.get("/api/demo/normal")
@@ -114,13 +157,33 @@ async def simulate_attack(
         500: {"description": "Internal server error during transaction ingestion"},
     },
 )
-def ingest_transaction(
+async def ingest_transaction(
     transaction: Transaction,
     response: Response,
+    session_id: str | None = Query(
+        default=None,
+        description="Optional session or run ID for isolating demonstration scenarios",
+    ),
+    x_session_id: str | None = Header(default=None, alias="X-Session-ID"),
     store: ArgusStore = Depends(get_argus_store),
+    gateway: DetectorGateway = Depends(get_detector_gateway),
+    ws_manager: WebSocketManager = Depends(get_websocket_manager),
+    settings: Settings = Depends(get_settings),
 ) -> TransactionIngestionResponse:
+    effective_batch = (
+        session_id
+        or x_session_id
+        or (
+            transaction.transaction_id.rsplit("-", 1)[0]
+            if "-" in transaction.transaction_id
+            else "INGESTED"
+        )
+    )
+
     try:
-        result = store.ingest_transaction(transaction)
+        result = await asyncio.to_thread(
+            store.ingest_transaction, transaction, effective_batch
+        )
     except IngestionConflictError as error:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -134,17 +197,107 @@ def ingest_transaction(
 
     if result == IngestionStatus.ALREADY_RECEIVED:
         response.status_code = status.HTTP_200_OK
-        message = "Transaction already received with identical data"
-    else:
-        response.status_code = status.HTTP_201_CREATED
-        message = "Transaction ingested successfully"
+        return TransactionIngestionResponse(
+            status=result,
+            message="Transaction already received with identical data",
+            transaction_id=transaction.transaction_id,
+            transaction=transaction,
+        )
+
+    response.status_code = status.HTTP_201_CREATED
+
+    # 1. Broadcast transaction.received
+    received_event = create_stream_event(
+        event_type="transaction.received",
+        timestamp=transaction.timestamp,
+        data=transaction.model_dump(mode="json"),
+    )
+    try:
+        await ws_manager.broadcast(received_event)
+    except Exception as err:
+        logger.warning(f"Failed to broadcast transaction.received: {err}")
+
+    # 2. Contextual rolling graph fraud analysis
+    try:
+        window_txs = await asyncio.to_thread(
+            store.get_recent_transactions_window,
+            end_timestamp=transaction.timestamp,
+            window_minutes=settings.analysis_window_minutes,
+            max_count=settings.analysis_max_transactions,
+            batch_id=effective_batch,
+        )
+        graph_signal = await gateway.analyze_graph(window_txs)
+        await asyncio.to_thread(store.save_signal, graph_signal)
+
+        # 3. Broadcast transaction.scored
+        scored_event = create_stream_event(
+            event_type="transaction.scored",
+            timestamp=transaction.timestamp,
+            data={
+                "transaction_id": transaction.transaction_id,
+                "signal_id": graph_signal.signal_id,
+                "risk_score": graph_signal.risk_score,
+                "anomaly_type": graph_signal.anomaly_type,
+                "suspicious_accounts": graph_signal.suspicious_accounts,
+                "suspicious_transactions": graph_signal.suspicious_transactions,
+                "reasons": graph_signal.reasons,
+            },
+        )
+        try:
+            await ws_manager.broadcast(scored_event)
+        except Exception as err:
+            logger.warning(f"Failed to broadcast transaction.scored: {err}")
+
+        # 4. Check if high-risk fraud alert threshold is exceeded
+        if graph_signal.risk_score >= settings.fraud_alert_threshold:
+            alert_event = create_stream_event(
+                event_type="alert.created",
+                timestamp=transaction.timestamp,
+                data={
+                    "alert_id": f"ALT-{graph_signal.signal_id.removeprefix('GRAPH-')}",
+                    "transaction_id": transaction.transaction_id,
+                    "signal_id": graph_signal.signal_id,
+                    "risk_score": graph_signal.risk_score,
+                    "anomaly_type": graph_signal.anomaly_type,
+                    "severity": "critical" if graph_signal.risk_score >= 0.85 else "high",
+                    "suspicious_accounts": graph_signal.suspicious_accounts,
+                    "suspicious_transactions": graph_signal.suspicious_transactions,
+                    "supporting_evidence": graph_signal.reasons,
+                    "message": (
+                        f"Graph risk score {graph_signal.risk_score:.3f} "
+                        f"exceeded threshold {settings.fraud_alert_threshold:.2f}"
+                    ),
+                },
+            )
+            try:
+                await ws_manager.broadcast(alert_event)
+            except Exception as err:
+                logger.warning(f"Failed to broadcast alert.created: {err}")
+
+    except Exception as error:
+        logger.warning(
+            f"Graph analysis failed for transaction {transaction.transaction_id}: {error}"
+        )
+        fail_event = create_stream_event(
+            event_type="transaction.analysis_failed",
+            timestamp=transaction.timestamp,
+            data={
+                "transaction_id": transaction.transaction_id,
+                "error": f"Graph analysis unavailable: {str(error)}",
+            },
+        )
+        try:
+            await ws_manager.broadcast(fail_event)
+        except Exception as err:
+            logger.warning(f"Failed to broadcast transaction.analysis_failed: {err}")
 
     return TransactionIngestionResponse(
         status=result,
-        message=message,
+        message="Transaction ingested successfully",
         transaction_id=transaction.transaction_id,
         transaction=transaction,
     )
+
 
 
 @app.get(
