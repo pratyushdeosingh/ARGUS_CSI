@@ -8,7 +8,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class StrictModel(BaseModel):
@@ -19,6 +19,11 @@ class TransactionStatus(str, Enum):
     PENDING = "pending"
     COMPLETED = "completed"
     CANCELLED = "cancelled"
+
+
+class IngestionStatus(str, Enum):
+    CREATED = "created"
+    ALREADY_RECEIVED = "already_received"
 
 
 class IncidentStatus(str, Enum):
@@ -44,6 +49,27 @@ class Transaction(StrictModel):
     device_id: str
     ip_address: str
     status: TransactionStatus
+
+    @field_validator("timestamp")
+    @classmethod
+    def timestamp_must_have_timezone(cls, value: datetime) -> datetime:
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("timestamp must include a UTC offset")
+        if value.utcoffset().total_seconds() != 0:
+            raise ValueError("timestamp must be UTC")
+        return value
+
+    @field_validator("currency")
+    @classmethod
+    def normalize_currency(cls, value: str) -> str:
+        return value.upper()
+
+
+class TransactionIngestionResponse(StrictModel):
+    status: IngestionStatus
+    message: str
+    transaction_id: str
+    transaction: Transaction
 
 
 class GraphSignal(StrictModel):

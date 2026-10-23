@@ -8,7 +8,19 @@ import sqlite3
 from pathlib import Path
 from threading import RLock
 
-from .models import AuditEvent, GraphSignal, Incident, PlatformMetrics, SystemSignal, Transaction
+from .models import (
+    AuditEvent,
+    GraphSignal,
+    Incident,
+    IngestionStatus,
+    PlatformMetrics,
+    SystemSignal,
+    Transaction,
+)
+
+
+class IngestionConflictError(Exception):
+    """Raised when an ingested transaction has an existing ID but conflicting data."""
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -51,6 +63,8 @@ class ArgusStore:
                     ON transaction_events(batch_id);
                 CREATE INDEX IF NOT EXISTS ix_transactions_source
                     ON transaction_events(source_account);
+                CREATE INDEX IF NOT EXISTS ix_transactions_timestamp_id
+                    ON transaction_events(timestamp DESC, transaction_id DESC);
 
                 CREATE TABLE IF NOT EXISTS detector_signals (
                     signal_id TEXT PRIMARY KEY,
@@ -267,5 +281,80 @@ class ArgusStore:
             severity_counts={row["severity"]: row["count"] for row in severity_rows},
         )
 
+    def ingest_transaction(self, item: Transaction) -> IngestionStatus:
+        with self._lock, self._connect() as connection:
+            existing = connection.execute(
+                "SELECT payload FROM transaction_events WHERE transaction_id = ?",
+                (item.transaction_id,),
+            ).fetchone()
+            if existing is not None:
+                stored = Transaction.model_validate_json(existing["payload"])
+                if stored == item:
+                    return IngestionStatus.ALREADY_RECEIVED
+                raise IngestionConflictError(
+                    f"Transaction '{item.transaction_id}' already exists with different transaction data"
+                )
+
+            try:
+                connection.execute(
+                    """
+                    INSERT INTO transaction_events (
+                        transaction_id, batch_id, timestamp, source_account,
+                        destination_account, amount, currency, device_id,
+                        ip_address, status, payload
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        item.transaction_id,
+                        "INGESTED",
+                        item.timestamp.isoformat(),
+                        item.source_account,
+                        item.destination_account,
+                        item.amount,
+                        item.currency,
+                        item.device_id,
+                        item.ip_address,
+                        item.status.value,
+                        item.model_dump_json(),
+                    ),
+                )
+                return IngestionStatus.CREATED
+            except sqlite3.IntegrityError:
+                row = connection.execute(
+                    "SELECT payload FROM transaction_events WHERE transaction_id = ?",
+                    (item.transaction_id,),
+                ).fetchone()
+                if row is not None:
+                    stored = Transaction.model_validate_json(row["payload"])
+                    if stored == item:
+                        return IngestionStatus.ALREADY_RECEIVED
+                raise IngestionConflictError(
+                    f"Transaction '{item.transaction_id}' already exists with different transaction data"
+                )
+
+    def get_transaction(self, transaction_id: str) -> Transaction | None:
+        with self._lock, self._connect() as connection:
+            row = connection.execute(
+                "SELECT payload FROM transaction_events WHERE transaction_id = ?",
+                (transaction_id,),
+            ).fetchone()
+        return Transaction.model_validate_json(row["payload"]) if row else None
+
+    def list_transactions(self, limit: int = 50, offset: int = 0) -> list[Transaction]:
+        with self._lock, self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT payload FROM transaction_events
+                ORDER BY timestamp DESC, transaction_id DESC
+                LIMIT ? OFFSET ?
+                """,
+                (limit, offset),
+            ).fetchall()
+        return [Transaction.model_validate_json(row["payload"]) for row in rows]
+
 
 argus_store = ArgusStore()
+
+
+def get_argus_store() -> ArgusStore:
+    return argus_store
