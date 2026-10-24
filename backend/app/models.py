@@ -8,11 +8,12 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from contracts.financial_models import FinancialAssessment
 
 
 class StrictModel(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
 
 
 class TransactionStatus(str, Enum):
@@ -62,6 +63,8 @@ class Transaction(StrictModel):
     @field_validator("currency")
     @classmethod
     def normalize_currency(cls, value: str) -> str:
+        if len(value) != 3 or not value.isascii() or not value.isalpha():
+            raise ValueError("currency must be a three-letter ASCII code")
         return value.upper()
 
 
@@ -70,6 +73,8 @@ class TransactionIngestionResponse(StrictModel):
     message: str
     transaction_id: str
     transaction: Transaction
+    financial_assessment: FinancialAssessment | None = None
+    incident_id: str | None = None
 
 
 class GraphSignal(StrictModel):
@@ -111,7 +116,10 @@ class Incident(StrictModel):
     severity: Severity
     confidence: float = Field(ge=0, le=1)
     financial_signal_id: str
-    infrastructure_signal_id: str
+    infrastructure_signal_id: str | None = None
+    case_type: Literal["financial", "cross_domain"] = "cross_domain"
+    financial_assessment_id: str | None = None
+    transaction_ids: list[str] = Field(default_factory=list)
     affected_accounts: list[str]
     summary: str
     evidence: list[str]
@@ -161,6 +169,15 @@ class AnalysisRequest(StrictModel):
     telemetry_service: str = Field(default="payment-api", min_length=1, max_length=120)
     source_label: str = Field(default="api", min_length=1, max_length=80)
 
+    @model_validator(mode="after")
+    def valid_financial_context(self):
+        if len({tx.transaction_id for tx in self.transactions}) != len(self.transactions):
+            raise ValueError("Duplicate transaction IDs in analysis")
+        first = min(tx.timestamp for tx in self.transactions)
+        if any(tx.timestamp >= first for tx in self.baseline_transactions):
+            raise ValueError("Baseline history must precede the first analysed payment")
+        return self
+
 
 class AnalysisResponse(StrictModel):
     analysis_id: str
@@ -171,6 +188,7 @@ class AnalysisResponse(StrictModel):
     system_signal: SystemSignal | None
     detector_status: DetectorStatus
     incident: Incident | None
+    financial_assessment: FinancialAssessment | None = None
 
 
 class PlatformMetrics(StrictModel):
@@ -180,6 +198,7 @@ class PlatformMetrics(StrictModel):
     incidents_open: int
     critical_incidents: int
     accounts_observed: int
-    total_value_observed: float
+    total_value_observed: float | None
+    value_by_currency: dict[str, float] = Field(default_factory=dict)
     average_confidence: float
     severity_counts: dict[str, int]

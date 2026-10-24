@@ -19,3 +19,6 @@ dist/
 .idea/
 .DS_Store
 Thumbs.db
+
+# Experimental offline training outputs
+artifacts/

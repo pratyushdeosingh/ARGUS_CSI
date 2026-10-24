@@ -19,17 +19,18 @@ it and the existing durable case workflow requires a system signal.
 
 ## Submission boundaries
 
-The core supports batch and per-payment graph scoring. The specialist mule/scam
-engine has a separate demo/API; React does not yet consume its breakdown or live
-WebSocket events. Graph-only results and streamed alerts do not create durable
-financial-only cases. The existing audit trail covers simulated response
-execution, rather than a complete compliance investigation/reporting workflow.
+Core batch/stream input uses a shared financial.v1 assessment with rules, TGNN,
+mule and scam components and creates durable financial-only cases. React Data
+Lab shows contributions, cases and an investigation dialog with revisioned
+notes/assignment/status and draft report export. It does not yet subscribe to
+the live stream. The legacy standalone specialist demo is retained.
 
-The TGNN checkpoint was trained on synthetic normal/attack batches. Batch model
-promotion requires rule risk >= 0.40; specialist fusion remains experimental.
-No independent held-out metrics, calibrated fraud probabilities or SHAP
-explanations are included. All response actions are simulated.
+The [Pratyush delivery report](pratyush-delivery.md) records this scope and its
+verification. Investigation/reporting is a synthetic prototype with caller-
+supplied identities, not authenticated compliance operation or regulatory
+filing. No model was newly deployed: the bundled TGNN remains demo-trained.
+Independent synthetic evaluation and offline training tooling now exist; real
+labelled data, calibrated performance and ML feature attribution remain pending.
 
-Before submitting, verify the original official problem statement against the
-working requirement list. This repository documents implementation status,
-not a guarantee of competition eligibility or regulatory compliance.
+Before submitting, verify the official rubric against the working requirement
+list. Passing prototype checks is not proof of production banking readiness.

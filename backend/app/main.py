@@ -17,6 +17,8 @@ from fastapi import (
 from fastapi.middleware.cors import CORSMiddleware
 
 from .config import Settings, get_settings
+from contracts.financial_models import FinancialAssessment
+from .financial import assessment_signal, financial_incident
 from .correlation import correlate
 from .detectors import DetectorGateway, DetectorUnavailable, get_detector_gateway
 from .models import (
@@ -61,9 +63,12 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://127.0.0.1:5173", "http://localhost:5173"],
     allow_credentials=False,
-    allow_methods=["GET", "POST"],
+    allow_methods=["GET", "POST", "PATCH"],
     allow_headers=["*"],
 )
+
+from .investigations import router as investigation_router
+app.include_router(investigation_router)
 
 
 @app.get("/health")
@@ -205,6 +210,8 @@ async def ingest_transaction(
         )
 
     response.status_code = status.HTTP_201_CREATED
+    financial = None
+    incident = None
 
     # 1. Broadcast transaction.received
     received_event = create_stream_event(
@@ -226,8 +233,13 @@ async def ingest_transaction(
             max_count=settings.analysis_max_transactions,
             batch_id=effective_batch,
         )
-        graph_signal = await gateway.analyze_graph(window_txs)
+        financial = await gateway.assess_financial(window_txs)
+        graph_signal = assessment_signal(financial)
+        await asyncio.to_thread(store.save_assessment, financial)
         await asyncio.to_thread(store.save_signal, graph_signal)
+        incident = financial_incident(financial, settings.fraud_alert_threshold)
+        if incident is not None:
+            incident = await asyncio.to_thread(store.save_incident, incident)
 
         # 3. Broadcast transaction.scored
         scored_event = create_stream_event(
@@ -241,6 +253,8 @@ async def ingest_transaction(
                 "suspicious_accounts": graph_signal.suspicious_accounts,
                 "suspicious_transactions": graph_signal.suspicious_transactions,
                 "reasons": graph_signal.reasons,
+                "financial_assessment": financial.model_dump(mode="json"),
+                "incident_id": incident.incident_id if incident else None,
             },
         )
         try:
@@ -259,7 +273,7 @@ async def ingest_transaction(
                     "signal_id": graph_signal.signal_id,
                     "risk_score": graph_signal.risk_score,
                     "anomaly_type": graph_signal.anomaly_type,
-                    "severity": "critical" if graph_signal.risk_score >= 0.85 else "high",
+                    "severity": incident.severity.value if incident else "high",
                     "suspicious_accounts": graph_signal.suspicious_accounts,
                     "suspicious_transactions": graph_signal.suspicious_transactions,
                     "supporting_evidence": graph_signal.reasons,
@@ -267,6 +281,8 @@ async def ingest_transaction(
                         f"Graph risk score {graph_signal.risk_score:.3f} "
                         f"exceeded threshold {settings.fraud_alert_threshold:.2f}"
                     ),
+                    "incident_id": incident.incident_id if incident else None,
+                    "financial_assessment_id": financial.assessment_id,
                 },
             )
             try:
@@ -296,6 +312,8 @@ async def ingest_transaction(
         message="Transaction ingested successfully",
         transaction_id=transaction.transaction_id,
         transaction=transaction,
+        financial_assessment=financial,
+        incident_id=incident.incident_id if incident else None,
     )
 
 
@@ -342,10 +360,14 @@ async def analyze_caller_data(
     request: AnalysisRequest,
     gateway: DetectorGateway = Depends(get_detector_gateway),
     store: ArgusStore = Depends(get_argus_store),
+    settings: Settings = Depends(get_settings),
 ) -> AnalysisResponse:
     """Analyze arbitrary caller-supplied transactions and optional host telemetry."""
 
     try:
+        financial = await gateway.assess_financial(
+            request.transactions, baseline_transactions=request.baseline_transactions,
+        )
         graph_signal, system_signal, status = await gateway.analyze_payload(
             request.transactions,
             baseline_transactions=request.baseline_transactions,
@@ -354,13 +376,18 @@ async def analyze_caller_data(
             correlate_with_latest_system=request.correlate_with_latest_system,
             telemetry_host=request.telemetry_host,
             telemetry_service=request.telemetry_service,
+            financial_assessment=financial,
         )
     except DetectorUnavailable as error:
         raise HTTPException(status_code=503, detail=str(error)) from error
 
     analysis_id = f"ANL-{graph_signal.signal_id.removeprefix('GRAPH-')}"
-    store.save_transactions(analysis_id, request.transactions)
+    try:
+        store.save_transactions(analysis_id, request.transactions)
+    except IngestionConflictError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
     store.save_signal(graph_signal)
+    store.save_assessment(financial)
 
     incident = None
     if system_signal is not None:
@@ -371,8 +398,14 @@ async def analyze_caller_data(
                 system_signal=system_signal,
             )
         )
+        incident.financial_assessment_id = financial.assessment_id
+        incident.transaction_ids = [tx.transaction_id for tx in request.transactions]
         incident = store.save_incident(incident)
         demo_state.incident = incident
+    else:
+        incident = financial_incident(financial, settings.fraud_alert_threshold)
+        if incident is not None:
+            incident = store.save_incident(incident)
 
     return AnalysisResponse(
         analysis_id=analysis_id,
@@ -382,6 +415,7 @@ async def analyze_caller_data(
         system_signal=system_signal,
         detector_status=status,
         incident=incident,
+        financial_assessment=financial,
     )
 
 
@@ -426,23 +460,29 @@ def platform_metrics(
 @app.post("/api/incidents/{incident_id}/approve")
 def approve(
     incident_id: str,
-    actor: str = "human-analyst",
+    actor: str = Query(default="human-analyst", min_length=1, max_length=100),
     store: ArgusStore = Depends(get_argus_store),
 ) -> dict[str, object]:
-    incident = store.get_incident(incident_id)
-    if incident is None:
-        raise HTTPException(status_code=404, detail="Incident not found")
-    if incident.status is not IncidentStatus.AWAITING_APPROVAL:
-        raise HTTPException(
-            status_code=409,
-            detail=f"Incident cannot be approved while {incident.status.value}",
-        )
-    incident, audit_events = approve_containment(incident, actor)
+    actor = actor.strip()
+    if not actor:
+        raise HTTPException(status_code=422, detail="Analyst identity is required")
+    try:
+        incident, audit_events = store.approve_incident(incident_id, actor)
+    except KeyError as error:
+        raise HTTPException(status_code=404, detail="Incident not found") from error
+    except ValueError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
     demo_state.incident = incident
     demo_state.audit_events.extend(audit_events)
-    incident = store.save_incident(incident)
-    store.save_audit_events(incident_id, audit_events)
     return {"incident": incident, "audit_events": audit_events}
+
+
+@app.get("/api/financial-assessments/{assessment_id}", response_model=FinancialAssessment)
+def get_financial_assessment(assessment_id: str, store: ArgusStore = Depends(get_argus_store)) -> FinancialAssessment:
+    assessment = store.get_assessment(assessment_id)
+    if assessment is None:
+        raise HTTPException(status_code=404, detail="Assessment not found")
+    return assessment
 
 
 @app.get("/api/audit", response_model=list[AuditEvent])

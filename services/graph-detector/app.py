@@ -22,6 +22,8 @@ from graph_models import (
 )
 from scenarios import get_all_scenarios
 from scam_detector import ScamDetector
+from financial import assess_financial
+from contracts.financial_models import FinancialAssessment
 from visualization import to_cytoscape
 
 
@@ -100,6 +102,14 @@ def analyze_context(request: ContextualAnalysisRequest) -> GraphSignal:
     """Analyze against a request-scoped baseline without mutating global state."""
 
     return detector.analyze(request.transactions, request.baseline_transactions)
+
+
+@app.post("/assess-financial", response_model=FinancialAssessment)
+def financial_assessment(request: ContextualAnalysisRequest) -> FinancialAssessment:
+    try:
+        return assess_financial(detector, request.transactions, request.baseline_transactions or None)
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
 
 
 @app.post("/visualize", response_model=VisualizationResponse)

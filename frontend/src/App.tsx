@@ -52,6 +52,10 @@ import type {
 } from "./types";
 
 type DemoPhase = 0 | 1 | 2 | 3 | 4 | 5 | 6;
+type AnalysisView = Omit<AttackResponse, "system_signal" | "incident"> & {
+  system_signal: AttackResponse["system_signal"] | null;
+  incident: Incident | null;
+};
 
 const PHASE_LABELS = [
   "Environment secure",
@@ -81,10 +85,10 @@ function classNames(...values: Array<string | false | null | undefined>) {
   return values.filter(Boolean).join(" ");
 }
 
-function formatCurrency(amount: number) {
+function formatCurrency(amount: number, currency = "INR") {
   return new Intl.NumberFormat("en-IN", {
     style: "currency",
-    currency: "INR",
+    currency,
     maximumFractionDigits: 0,
   }).format(amount);
 }
@@ -152,7 +156,7 @@ function TransactionGraph({
           id: transaction.transaction_id,
           source: transaction.source_account,
           target: transaction.destination_account,
-          label: formatCurrency(transaction.amount),
+          label: formatCurrency(transaction.amount, transaction.currency),
         },
         classes: suspiciousEdges.has(transaction.transaction_id) ? "attack-edge" : "normal-edge",
       })),
@@ -347,9 +351,9 @@ function IncidentPanel({ incident, phase }: { incident: Incident | null; phase: 
         <span className="mono muted">{incident.incident_id}</span>
       </div>
       <span className="eyebrow">ARGUS VERDICT</span>
-      <h2>{phase === 6 ? "Coordinated attack contained" : "Coordinated attack detected"}</h2>
+      <h2>{incident.case_type === "financial" ? "Financial fraud case" : phase === 6 ? "Coordinated attack contained" : "Coordinated attack detected"}</h2>
       <div className="confidence-row">
-        <span>Correlation confidence</span>
+        <span>{incident.case_type === "financial" ? "Financial risk · not a probability" : "Correlation confidence"}</span>
         <strong>{Math.round(incident.confidence * 100)}%</strong>
       </div>
       <div className="confidence-track">
@@ -372,7 +376,7 @@ function IncidentPanel({ incident, phase }: { incident: Incident | null; phase: 
 function App() {
   const [phase, setPhase] = useState<DemoPhase>(0);
   const [normalTransactions, setNormalTransactions] = useState<Transaction[]>(NORMAL_TRANSACTIONS);
-  const [attack, setAttack] = useState<AttackResponse | null>(null);
+  const [attack, setAttack] = useState<AnalysisView | null>(null);
   const [incident, setIncident] = useState<Incident | null>(null);
   const [auditEvents, setAuditEvents] = useState<AuditEvent[]>([]);
   const [detectorStatus, setDetectorStatus] = useState<DetectorStatus | null>(null);
@@ -479,7 +483,7 @@ function App() {
     const response = await analyzeData(request);
     setDetectorStatus(response.detector_status);
     setAuditEvents([]);
-    if (response.system_signal && response.incident) {
+    {
       setAttack({
         mode: "attack",
         transactions: response.transactions,
@@ -489,10 +493,10 @@ function App() {
         incident: response.incident,
       });
       setIncident(response.incident);
-      if (response.incident.status === "contained") {
+      if (response.incident?.status === "contained") {
         setAuditEvents(await loadAuditEvents(response.incident.incident_id));
       }
-      setPhase(response.incident.status === "contained" ? 6 : 5);
+      setPhase(response.incident?.status === "contained" ? 6 : 5);
     }
     await refreshPlatform();
     return response;
@@ -517,8 +521,11 @@ function App() {
 
   const visibleTransactions = phase >= 2 && attack ? attack.transactions : normalTransactions;
   const graphVisible = phase >= 3 && attack !== null;
-  const systemVisible = phase >= 4 && attack !== null;
-  const attackTotal = attack?.transactions.reduce((sum, transaction) => sum + transaction.amount, 0) ?? 0;
+  const systemVisible = phase >= 4 && attack?.system_signal != null;
+  const valuesByCurrency = (attack?.transactions ?? []).reduce<Record<string, number>>((values, tx) => {
+    values[tx.currency] = (values[tx.currency] ?? 0) + tx.amount; return values;
+  }, {});
+  const attackValueLabel = Object.entries(valuesByCurrency).map(([currency, amount]) => formatCurrency(amount, currency)).join(" · ");
   const suspiciousAccounts = attack?.graph_signal.suspicious_accounts ?? [];
   const suspiciousTransactions = attack?.graph_signal.suspicious_transactions ?? [];
   const originAccount = attack?.transactions[0]?.source_account ?? "—";
@@ -537,7 +544,7 @@ function App() {
         phase: 2,
         time: attack ? formatTime(attack.transactions.at(-1)?.timestamp ?? attack.graph_signal.timestamp) : "--:--:--",
         title: humanize(attack?.graph_signal.anomaly_type ?? "Transaction sequence"),
-        detail: suspiciousAccounts.slice(0, 4).join(" → ") || "Awaiting graph analysis",
+        detail: suspiciousAccounts.slice(0, 4).join(", ") || "Awaiting graph analysis",
         icon: <Zap size={15} />,
       },
       {
@@ -549,15 +556,15 @@ function App() {
       },
       {
         phase: 4,
-        time: attack ? formatTime(attack.system_signal.timestamp) : "--:--:--",
+        time: attack?.system_signal ? formatTime(attack.system_signal.timestamp) : "--:--:--",
         title: "System anomaly detected",
-        detail: `Infrastructure risk ${Math.round((attack?.system_signal.risk_score ?? 0) * 100)}/100`,
+        detail: attack?.system_signal ? `Infrastructure risk ${Math.round(attack.system_signal.risk_score * 100)}/100` : "No infrastructure evidence supplied",
         icon: <Cpu size={15} />,
       },
       {
         phase: 5,
         time: incident ? formatTime(incident.timestamp) : "--:--:--",
-        title: "Signals correlated",
+        title: incident?.case_type === "financial" ? "Financial case created" : "Signals correlated",
         detail: incident ? `${humanize(incident.severity)} incident ${incident.incident_id}` : "Awaiting correlation",
         icon: <ShieldAlert size={15} />,
       },
@@ -566,7 +573,7 @@ function App() {
   );
 
   const detectorsHealthy = detectorStatus?.graph.availability === "online"
-    && detectorStatus.system.availability === "online";
+    && (detectorStatus.system.availability === "online" || detectorStatus.system.origin === "none");
 
   return (
     <div className={classNames("app-shell", phase >= 5 && phase < 6 && "critical-mode")}>
@@ -653,7 +660,7 @@ function App() {
 
             <section className="panel asset-panel">
               <div className="panel-heading compact">
-                <div><span className="eyebrow">AT-RISK VALUE</span><h2>{formatCurrency(phase >= 2 ? attackTotal : 0)}</h2></div>
+                <div><span className="eyebrow">OBSERVED PAYMENT VALUE</span><h2>{phase >= 2 && attackValueLabel ? attackValueLabel : formatCurrency(0)}</h2></div>
                 <Database size={18} />
               </div>
               <div className="asset-row"><span>Origin account</span><strong>{phase >= 1 ? originAccount : "—"}</strong></div>
@@ -693,8 +700,8 @@ function App() {
                 icon={<ServerCog size={19} />}
                 eyebrow="NITIN · eBPF"
                 title="Payment service anomaly"
-                score={attack?.system_signal.risk_score ?? 0}
-                findings={attack?.system_signal.indicators ?? []}
+                score={attack?.system_signal?.risk_score ?? 0}
+                findings={attack?.system_signal?.indicators ?? []}
                 visible={systemVisible}
                 status={detectorStatus?.system}
               />

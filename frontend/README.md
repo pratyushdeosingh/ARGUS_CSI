@@ -13,11 +13,13 @@ the existing cross-domain investigation demo. It calls the core backend on port
 
 ## Missing
 
-There is no WebSocket subscriber, live payment feed or specialist mule/scam
-breakdown in this React app. The staged demo timeline is a presentation, not a
+Data Lab now defaults to financial-only scoring, shows the financial.v1
+rules/ML/mule/scam table, and opens case investigation with assignment, status,
+revisioned notes and draft JSON export. There is still no WebSocket subscriber
+or live payment feed in this React app. The staged demo timeline is a presentation, not a
 live payment stream. Use the CLI watcher and standalone graph demo for those
-current capabilities. Financial-only cases and compliance reporting are also
-pending. See [TODO](../TODO.md).
+current capabilities. Financial-only cases and prototype draft reporting now work; authenticated
+roles, jurisdiction-specific compliance and real filing are pending. See [TODO](../TODO.md).
 
 ## Run
 

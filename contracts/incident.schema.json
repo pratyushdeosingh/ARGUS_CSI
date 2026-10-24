@@ -19,42 +19,107 @@
     "status"
   ],
   "properties": {
-    "incident_id": { "type": "string" },
-    "timestamp": { "type": "string", "format": "date-time" },
-    "verdict": { "type": "string" },
+    "incident_id": {
+      "type": "string"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "verdict": {
+      "type": "string"
+    },
     "severity": {
       "type": "string",
-      "enum": ["informational", "suspicious", "high", "critical"]
+      "enum": [
+        "informational",
+        "suspicious",
+        "high",
+        "critical"
+      ]
     },
-    "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
-    "financial_signal_id": { "type": "string" },
-    "infrastructure_signal_id": { "type": "string" },
+    "confidence": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "financial_signal_id": {
+      "type": "string"
+    },
+    "infrastructure_signal_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
     "affected_accounts": {
       "type": "array",
-      "items": { "type": "string" }
+      "items": {
+        "type": "string"
+      }
     },
-    "summary": { "type": "string" },
+    "summary": {
+      "type": "string"
+    },
     "evidence": {
       "type": "array",
-      "items": { "type": "string" }
+      "items": {
+        "type": "string"
+      }
     },
     "recommended_actions": {
       "type": "array",
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["action", "target", "approval_required", "status"],
+        "required": [
+          "action",
+          "target",
+          "approval_required",
+          "status"
+        ],
         "properties": {
-          "action": { "type": "string" },
-          "target": { "type": "string" },
-          "approval_required": { "type": "boolean" },
-          "status": { "type": "string" }
+          "action": {
+            "type": "string"
+          },
+          "target": {
+            "type": "string"
+          },
+          "approval_required": {
+            "type": "boolean"
+          },
+          "status": {
+            "type": "string"
+          }
         }
       }
     },
     "status": {
       "type": "string",
-      "enum": ["monitoring", "awaiting_approval", "contained"]
+      "enum": [
+        "monitoring",
+        "awaiting_approval",
+        "contained"
+      ]
+    },
+    "financial_assessment_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "case_type": {
+      "type": "string",
+      "enum": [
+        "financial",
+        "cross_domain"
+      ]
+    },
+    "transaction_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
     }
   }
 }
