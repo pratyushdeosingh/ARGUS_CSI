@@ -8,7 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field, RootModel, field_validator, m
 
 
 class StrictModel(BaseModel):
-    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True, allow_inf_nan=False)
 
 
 class TransactionStatus(str, Enum):
@@ -40,6 +40,8 @@ class Transaction(StrictModel):
     @field_validator("currency")
     @classmethod
     def normalize_currency(cls, value: str) -> str:
+        if len(value) != 3 or not value.isascii() or not value.isalpha():
+            raise ValueError("currency must be a three-letter ASCII code")
         return value.upper()
 
 
@@ -75,7 +77,7 @@ class BaselineResponse(StrictModel):
 
 class ContextualAnalysisRequest(StrictModel):
     transactions: list[Transaction] = Field(min_length=1, max_length=5000)
-    baseline_transactions: list[Transaction] = Field(min_length=1, max_length=10000)
+    baseline_transactions: list[Transaction] = Field(default_factory=list, max_length=10000)
 
 
 class VisualizationNodeData(StrictModel):

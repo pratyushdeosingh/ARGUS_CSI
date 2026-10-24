@@ -1648,3 +1648,19 @@ footer span:last-child {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Financial case workflow uses the existing Data Lab surface. */
+.financial-breakdown { overflow-x: auto; margin-block: 16px; }
+.financial-breakdown table { width: 100%; border-collapse: collapse; font-size: 11px; }
+.financial-breakdown th, .financial-breakdown td { padding: 8px 5px; text-align: left; border-bottom: 1px solid #26433a; }
+.financial-breakdown small { display: block; overflow-wrap: anywhere; }
+.case-workbench { width: min(720px, calc(100vw - 32px)); max-height: calc(100vh - 48px); padding: 24px; border: 1px solid #26433a; border-radius: 12px; color: #d8e7e2; background: #0b1915; overflow: auto; }
+.case-workbench::backdrop { background: rgb(0 0 0 / 65%); }
+.case-workbench p, .case-workbench li { font-size: 12px; line-height: 1.5; }
+.case-workbench label { display: grid; gap: 6px; margin-block: 12px; font-size: 12px; }
+.case-workbench input, .case-workbench select, .case-workbench textarea { width: 100%; padding: 9px; background: #0b1915; color: #d8e7e2; border: 1px solid #35564b; border-radius: 6px; }
+.case-workbench textarea { min-height: 80px; resize: vertical; }
+.case-workbench button, .history-row button { padding: 8px; margin: 4px; border: 1px solid #35564b; border-radius: 6px; color: #d8e7e2; background: #122c22; cursor: pointer; }
+.case-workbench button:disabled { opacity: .5; cursor: default; }
+.case-workbench pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+.case-workbench [role="alert"] { color: #ffab9f; }

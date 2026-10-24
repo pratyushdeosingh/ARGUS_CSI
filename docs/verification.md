@@ -1,3 +1,5 @@
+> Historical audit of c1f9a1d. For the current implementation, see [Pratyush delivery](pratyush-delivery.md).
+
 # Fintech readiness verification
 
 Audit date: 24 October 2026 (Asia/Kolkata). Scope: the team's supplied Problem

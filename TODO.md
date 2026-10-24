@@ -15,9 +15,25 @@ reviewed PRs; do not independently change shared score contracts.
 - [x] Simulated analyst approval and stored action audit trail.
 - [x] Automated unit/build/container/service checks in CI.
 
+## Pratyush delivery notes
+
+The current backend delivery implements unified financial.v1 scoring, durable
+financial-only cases, Data Lab breakdowns, investigation/revision history and
+draft reports, immutable payment ingestion, atomic approval/audit, and separate
+currency totals. See [delivery evidence](docs/pratyush-delivery.md).
+
+Synthetic evaluation/training tooling and checkpoint provenance are implemented.
+P0-4 remains open for approved representative real data, as requested by the
+user. P1-4 has checkpoint/policy provenance and a tested initial-feature ablation
+diagnostic; complete validated ML attribution remains pending. P0-3 is still Yojit's live
+React work; P0-5 still needs durable event replay and failed-analysis recovery.
+New request-scoped assessment history avoids the legacy engine's shared-state
+problem, but P1-6 remains open for the legacy endpoint and production concurrency.
+Completed checkboxes refer to the documented synthetic prototype scope.
+
 ## P0 — complete the financial fraud workflow
 
-- [ ] **P0-1: Unify core and specialist scoring — all three; Pratyush coordinates.**
+- [x] **P0-1: Unify core and specialist scoring — all three; Pratyush coordinates.**
   Define one versioned response containing transaction ID, 0–1 combined risk,
   detector contributions, reasons, suspicious nodes/edges and model provenance.
   Convert specialist 0–100 values once at the boundary. Batch and stream paths
@@ -25,7 +41,7 @@ reviewed PRs; do not independently change shared score contracts.
   predictions. Accept when the same controlled scenario reaches API, stored
   result and UI with consistent scores and no hidden fixture substitution.
 
-- [ ] **P0-2: Create financial-only cases — Pratyush.**
+- [x] **P0-2: Create financial-only cases — Pratyush.**
   Persist a qualifying fraud case from batch or streamed payments without a
   system signal. Keep infrastructure evidence optional. Accept when a mule
   stream creates a case visible in history after restart, a clean control does
@@ -70,7 +86,7 @@ reviewed PRs; do not independently change shared score contracts.
   negative labelled scenarios. Accept when integrated scam evidence reaches a
   financial case and false-positive examples are documented.
 
-- [ ] **P1-3: Investigation and draft reporting — Pratyush.**
+- [x] **P1-3: Investigation and draft reporting — Pratyush.**
   Add assignment, investigation status, notes, evidence references and draft
   suspicious activity report export. Retain reviewer identity and revision
   history. Accept when a case can be investigated and exported with source
@@ -83,10 +99,10 @@ reviewed PRs; do not independently change shared score contracts.
   score can be reproduced and its top model factors explained using an
   appropriate tested attribution method. Node rankings alone are insufficient.
 
-- [ ] **P1-5: Preserve ledger and approval integrity — Pratyush.**
-  Define transaction revision rules across batch and stream ingestion. Batch
-  upserts currently can replace transaction data/session grouping, whereas
-  stream ingestion rejects conflicting IDs. Add atomic approval/audit writes and
+- [x] **P1-5: Preserve ledger and approval integrity — Pratyush.**
+  Define transaction revision rules across batch and stream ingestion. Both batch and stream now reject conflicting IDs and preserve original
+  grouping for identical data. Corrections require a new ID; an immutable
+  revision-ledger feature is not implemented. Add atomic approval/audit writes and
   concurrent-approval tests. Accept when conflicting inputs cannot silently
   rewrite investigation history or execute duplicate simulated actions.
 
@@ -97,11 +113,17 @@ reviewed PRs; do not independently change shared score contracts.
   not make scoring atomic. Accept when restart/concurrent evaluation produces
   documented, reproducible results within bounded memory.
 
-- [ ] **P1-7: Payment-value metrics — Pratyush + Yojit.**
+- [x] **P1-7: Payment-value metrics — Pratyush + Yojit.**
   Group totals by currency and distinguish payment counts from sums of money.
-  The current aggregate `total_value_observed` adds raw amounts across
-  currencies; do not present it as a converted portfolio value. Accept when INR
+  The API now returns `value_by_currency`; the legacy scalar total is null
+  for mixed currencies. The graph labels and observed-value display retain
+  each currency. No FX conversion is performed. Accept when INR
   and USD controls remain separate in API and UI.
+
+Additional remaining work: define case grouping across overlapping windows;
+review prototype fan-out/known-beneficiary suppression against representative
+legitimate and fraudulent data; authenticate analyst identities before shared
+use. Synthetic acceptance checks are not a green flag for production use.
 
 ## P2 — submission hardening
 

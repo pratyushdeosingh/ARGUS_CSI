@@ -32,6 +32,7 @@ if str(GRAPH_DIR) not in sys.path:
 
 from detector import GraphDetector  # type: ignore[import-not-found]
 from graph_models import Transaction as GraphTx  # type: ignore[import-not-found]
+from financial import assess_financial
 
 
 
@@ -58,6 +59,11 @@ def mock_gateway(mock_graph_detector: GraphDetector):
     risk_engine = TransactionRiskEngine(mock_graph_detector)
 
     def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/assess-financial":
+            body = json.loads(request.content)
+            txs = [GraphTx.model_validate(tx) for tx in body["transactions"]]
+            result = assess_financial(mock_graph_detector, txs, [])
+            return httpx.Response(200, json=result.model_dump(mode="json"))
         if request.url.path == "/analyze":
             body = json.loads(request.content)
             txs = [GraphTx.model_validate(x) for x in body]
@@ -442,7 +448,11 @@ def test_mule_dataset_triggers_fraud_alert(client: TestClient) -> None:
                 assert alert["event_type"] == "alert.created"
                 assert alert["data"]["alert_id"].startswith("ALT-")
                 assert alert["data"]["risk_score"] >= 0.70
-                assert len(alert["data"]["suspicious_accounts"]) >= 4
+                # A large anomalous first leg can alert before the full chain arrives.
+                assert len(alert["data"]["suspicious_accounts"]) >= 2
+                assert alert["data"]["incident_id"].startswith("INC-FIN-")
+                case = client.get(f"/api/incidents/{alert['data']['incident_id']}").json()
+                assert case["status"] == "awaiting_approval"
                 alert_received = True
 
             scam = ws.receive_json()

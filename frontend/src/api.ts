@@ -6,6 +6,7 @@ import type {
   AttackResponse,
   DetectorStatus,
   Incident,
+  Investigation,
   NormalResponse,
   PlatformMetrics,
 } from "./types";
@@ -66,4 +67,21 @@ export function loadIncidents(limit = 20): Promise<Incident[]> {
 
 export function loadAuditEvents(incidentId: string): Promise<AuditEvent[]> {
   return request<AuditEvent[]>(`/api/audit?incident_id=${encodeURIComponent(incidentId)}`);
+}
+
+export function loadInvestigation(incidentId: string): Promise<Investigation> {
+  return request<Investigation>(`/api/incidents/${encodeURIComponent(incidentId)}/investigation`);
+}
+
+export function updateInvestigation(incidentId: string, update: {
+  actor: string; expected_revision: number; assigned_to: string | null;
+  status: Investigation["status"]; note?: string;
+}): Promise<Investigation> {
+  return request<Investigation>(`/api/incidents/${encodeURIComponent(incidentId)}/investigation`, {
+    method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(update),
+  });
+}
+
+export function loadDraftReport(incidentId: string): Promise<Record<string, unknown>> {
+  return request<Record<string, unknown>>(`/api/incidents/${encodeURIComponent(incidentId)}/report`);
 }

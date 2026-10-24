@@ -58,7 +58,10 @@ export interface Incident {
   severity: "informational" | "suspicious" | "high" | "critical";
   confidence: number;
   financial_signal_id: string;
-  infrastructure_signal_id: string;
+  infrastructure_signal_id: string | null;
+  case_type?: "financial" | "cross_domain";
+  financial_assessment_id?: string | null;
+  transaction_ids?: string[];
   affected_accounts: string[];
   summary: string;
   evidence: string[];
@@ -130,6 +133,31 @@ export interface AnalysisResponse {
   system_signal: SystemSignal | null;
   detector_status: DetectorStatus;
   incident: Incident | null;
+  financial_assessment?: FinancialAssessment | null;
+}
+
+export interface FinancialAssessment {
+  schema_version: "financial.v1";
+  assessment_id: string;
+  risk_score: number;
+  fusion_policy: string;
+  model: { name: string; checkpoint_sha256: string; validation_status: "synthetic_only"; explanation_method: string };
+  transaction_scores: {
+    transaction_id: string; risk_score: number; raw_ml_score: number; ml_used: boolean;
+    detectors: { rules: number; ml: number; mule: number; scam: number };
+    reasons: string[];
+  }[];
+  model_diagnostic?: { transaction_id: string; scope: string; sensitivities: {
+    feature: string; score_without_feature: number; score_difference: number;
+  }[] } | null;
+}
+
+export interface Investigation {
+  incident_id: string;
+  revision: number;
+  assigned_to: string | null;
+  status: "open" | "investigating" | "escalated" | "closed";
+  history: { id: number; timestamp: string; actor: string; revision: number; changes: Record<string, unknown> }[];
 }
 
 export interface PlatformMetrics {
@@ -139,7 +167,8 @@ export interface PlatformMetrics {
   incidents_open: number;
   critical_incidents: number;
   accounts_observed: number;
-  total_value_observed: number;
+  total_value_observed: number | null;
+  value_by_currency?: Record<string, number>;
   average_confidence: number;
   severity_counts: Record<string, number>;
 }

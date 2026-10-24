@@ -12,6 +12,7 @@ are tested; the complete fintech workflow is still under development. The
 coverage below follows the requirements supplied by the team. It is not a claim
 of complete compliance with an independently verified competition rubric.
 
+- [Pratyush implementation and verification](docs/pratyush-delivery.md)
 - [Prioritized work checklist](TODO.md)
 - [Verification results and limits](docs/verification.md)
 - [API contracts and integration boundaries](docs/integration.md)
@@ -24,30 +25,39 @@ of complete compliance with an independently verified competition rubric.
 | Suspicious transaction detection | Rules for amount, velocity, identity changes, new beneficiaries and money flow | Independent accuracy evaluation |
 | Fraudulent customer behaviour | Comparison with supplied historical transactions | No customer/KYC ingestion or validated customer classifier |
 | Graph analytics | Directed account graph, temporal paths, forwarding and fan-in/fan-out | Explicit cycle detection, communities and centrality-based investigation |
-| Mule detection | Temporal money-flow rules; specialist fan-in, forwarding and turnover heuristics | Specialist results are separate from core scoring and React |
-| Scam detection | Specialist fan-out, burst, repeated-amount and volume-surge heuristics | Broader labelled scam evaluation and core/UI integration |
-| AI/ML | PyTorch temporal graph neural network with a bundled checkpoint | Trained on synthetic demo batches; no independent held-out evaluation |
+| Mule detection | Temporal money-flow rules; specialist fan-in, forwarding and turnover heuristics | Broader independent network validation and advanced graph investigation |
+| Scam detection | Specialist fan-out, burst, repeated-amount and volume-surge heuristics | Representative labelled scam validation; raw heuristics remain experimental |
+| AI/ML | PyTorch temporal graph neural network with a bundled checkpoint | Independent synthetic evaluation is included; real-data validation remains pending |
 | Explainability | Rule evidence, account/transaction references and specialist detector breakdown | No SHAP or validated ML attribution; node scores are not feature attribution |
-| Real-time payments | Per-payment HTTP ingestion, rolling graph analysis and WebSocket events | No durable alert queue/retry pipeline; React does not subscribe yet |
-| Investigation cases | SQLite cases, analyst approval and simulated actions for cross-domain analysis | Financial-only scores/stream alerts do not yet create durable cases |
-| RegTech | Case history and simulated response audit trail | Compliance workflow and draft suspicious activity reporting |
-| Evaluation and datasets | Synthetic normal/attack fixtures and scenario tests | Representative dataset, held-out splits, precision, recall, F1, PR-AUC and false-positive analysis |
+| Real-time payments | Per-payment HTTP ingestion, rolling graph analysis and WebSocket events | High-risk cases are durable; alert replay/retry workers and React subscription remain pending |
+| Investigation cases | Durable financial-only and cross-domain cases, atomic simulated approval and audit | Case grouping across overlapping windows and production controls |
+| RegTech | Assignment, investigation status/notes, revision history and draft JSON reports | Authenticated roles, jurisdiction-specific review and actual regulatory filing |
+| Evaluation and datasets | Reproducible synthetic validation/test splits, precision/recall/F1/PR-AUC, false positives and rules comparison | Approved representative data and real-world validation |
 
 ## Working application paths
 
 ### Batch financial analysis
 
 `POST /api/analyze` accepts 1–5,000 transactions and optional baseline history.
-The backend calls the graph service and stores transactions and its signal.
-Without infrastructure evidence, the response has `system_signal: null` and
-`incident: null`. Supplying telemetry or a system signal enables the existing
-cross-domain incident workflow.
+The backend calls graph `/assess-financial` and stores the versioned assessment,
+transactions and signal. Qualifying risk creates a durable financial-only case
+without infrastructure evidence (`system_signal: null`). Low-risk analysis
+returns `incident: null`. Optional telemetry enables cross-domain correlation.
 
-The graph service evaluates seven rules and the TGNN. Batch model risk can raise
-the rule score only when independent rule risk is at least `0.40`. This guard
-limits unsupported promotions by the demo-trained model; it is not model
-calibration. Graph signal risk ranges from **0 to 1** and is not a calibrated
-fraud probability. Signal identity includes transaction contents and the baseline.
+The `financial.v1` contract combines rule, mule and scam contributions on a
+**0–1** scale. The raw TGNN contribution is permitted only when independent
+behavioural risk is at least 0.40. Known payees with baseline-scale amounts and
+unchanged device/IP do not receive a scam promotion solely for fan-out. These
+are transparent prototype policies, not calibrated fraud probabilities. Raw
+model/scam scores remain available alongside the used contributions.
+
+Each payment is evaluated chronologically in request-scoped, currency-specific
+context. Supplied baseline history must precede the first analysed payment.
+The response includes per-payment scores, reasons, suspicious accounts/edges
+and the checksum of the checkpoint actually loaded. Financial case threshold is
+`FRAUD_ALERT_THRESHOLD` (default 0.70). Assessment and case IDs are derived from
+inputs/model/policy, so identical reanalysis is idempotent. Transaction IDs are
+immutable across batch/stream ingestion; conflicting contents return 409.
 
 ### Continuous ingestion and alerts
 
@@ -62,8 +72,8 @@ request, rather than through a separate streaming worker.
 
 `/ws/transactions` emits `connection.established`, `transaction.received`,
 `transaction.scored`, `alert.created`, and `transaction.analysis_failed` events.
-A scoring failure does not undo ingestion. Alerts are transient WebSocket events;
-there is no durable replay of missed alerts or automatic rescore on duplicate
+A scoring failure does not undo ingestion. Alert events are transient; high-risk investigation cases and assessments
+are durable. There is no replay of missed events or automatic rescore on duplicate
 payment delivery. Watcher and replay scripts are provided below.
 
 ### Supplementary scam stream
@@ -86,8 +96,9 @@ Real-data accuracy and live React integration remain pending.
 The graph service exposes `POST /score-transaction` and a standalone `/demo`.
 It combines rules, TGNN, mule and scam heuristics into a **0–100** score with
 `ALLOW`, `REVIEW` or `BLOCK` recommendations. These recommendations do not execute
-payment controls. This experimental fusion is separate from the core batch/
-stream score, and its history is in memory. Use a single graph-service worker.
+payment controls. This legacy experimental fusion remains separate from the versioned core
+assessment policy, which reuses its detector components with request-scoped
+history. The legacy endpoint's shared history is in memory. Use a single graph-service worker.
 
 ### Analyst dashboard and optional infrastructure evidence
 
@@ -97,8 +108,12 @@ canonical demo correlates financial risk with process/file/network telemetry.
 The infrastructure detector runs in replay mode under Docker; guarded live
 collection requires Linux and bpftrace.
 
-The React dashboard currently has no WebSocket subscription or specialist score
-breakdown. Use the watcher for streaming and the graph demo for specialist scores.
+The React dashboard shows `financial.v1` detector breakdowns and financial-only
+cases in Data Lab. It has no WebSocket subscription yet; use the watcher for
+streaming. Data Lab case history opens an investigation dialog with assignment,
+status, revisioned notes and DRAFT JSON report export. Reports are not filed
+with a regulator; analyst identities are caller supplied until authentication
+and roles are implemented.
 Containment is simulated. Replaying the same contained case preserves its stored
 approval state and audit trail.
 
@@ -117,8 +132,8 @@ flowchart LR
     Engine --> Memory[In-memory history]
 ```
 
-The specialist engine and live WebSocket stream are not yet connected to the
-React analyst workflow. See [architecture details](docs/architecture.md).
+Versioned financial assessments connect batch/stream scoring and the React
+Data Lab. The live WebSocket stream is not yet subscribed by React. See [architecture details](docs/architecture.md).
 
 ## Run with Docker
 
@@ -214,7 +229,7 @@ variables in the shell; the backend does not automatically load a `.env` file.
 | `GRAPH_DETECTOR_URL` / `EBPF_DETECTOR_URL` | localhost ports 8001 / 8002 | Core detector connections |
 | `DETECTOR_TIMEOUT_SECONDS` | `2.5` locally, `5` in Compose | Detector request timeout |
 | `ARGUS_DB_PATH` | `data/argus.db` locally | SQLite path; Compose uses its mounted runtime volume |
-| `FRAUD_ALERT_THRESHOLD` | `0.70` | Stream alert threshold on the 0–1 graph score |
+| `FRAUD_ALERT_THRESHOLD` | `0.70` | Financial case and stream alert threshold on the 0–1 score |
 | `ANALYSIS_WINDOW_MINUTES` | `15` | Stream event-time window |
 | `ANALYSIS_MAX_TRANSACTIONS` | `100` | Maximum recent payments scored per stream window |
 | `ARGUS_GRAPH_BASELINE` | bundled normal transactions | Graph startup baseline path, set on the graph process |
@@ -245,6 +260,25 @@ checks and service smoke tests on pull requests and pushes to `main`. See the
 [verification report](docs/verification.md) for the checked revision, scope and
 known gaps. Passing tests do not mean every fintech requirement is implemented.
 
+## Synthetic evaluation and offline training
+
+```powershell
+python scripts/evaluate_financial.py --output reports/financial-evaluation.json
+python scripts/train_tgnn.py --output artifacts/models/tgnn-experiment.pt --epochs 60
+```
+
+The [saved report](reports/financial-evaluation.json) compares rules, raw TGNN and
+fusion with validation-selected thresholds and a separate synthetic test split.
+It includes payroll hard negatives, seeds, dataset/source fingerprints and model
+checksum. Training writes an experimental checkpoint and manifest; it refuses
+to overwrite the deployed bundle. It does not establish deployment readiness.
+No new checkpoint is deployed by this branch.
+
+The bundled raw TGNN misses some synthetic scam cases at the default threshold;
+independent heuristics supply the stronger fused result. Small generated test
+sets do not establish real-world accuracy, and ML feature attribution remains
+pending. See the delivery report for exact scope and evaluation limitations.
+
 ## Team and repository
 
 | Contributor | Next responsibilities |
@@ -261,7 +295,9 @@ backend/                       Core API, persistence, correlation and approval
 services/graph-detector/       Graph rules, TGNN, specialist engine and demo
 services/ebpf-detector/        Infrastructure replay and guarded Linux collection
 frontend/                      React batch analysis and investigation dashboard
-contracts/                     Shared transaction and signal JSON schemas
+contracts/                     Shared JSON schemas and financial.v1 Python models
+evaluation/                    Synthetic splits and binary evaluation metrics
+reports/                       Saved synthetic evaluation evidence
 scripts/                       Synthetic generator, replay, watcher and smoke check
 data/                          Synthetic fixtures and local runtime database
 docs/                          Integration, verification, architecture and demo

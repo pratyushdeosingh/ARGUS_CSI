@@ -32,8 +32,10 @@ features exist. Implementation work and owners are in [TODO](../TODO.md).
 - [ ] Update README coverage only for demonstrated capabilities.
 - [ ] Label synthetic data, replay telemetry, simulated actions and model limits.
 - [ ] Keep 0–1 graph scores separate from 0–100 specialist scores.
-- [ ] Do not claim React streaming, financial-only cases, compliance reporting,
-  held-out accuracy or SHAP until their TODO acceptance criteria pass.
+- [ ] Distinguish delivered financial cases and prototype draft reporting
+  from unfinished live React streaming, real-data accuracy, authenticated
+  compliance operation and complete ML attribution. Initial-feature ablation
+  diagnostics are not SHAP or causal explanations.
 - [ ] Record tested commit, CI link, manual-check results and remaining gaps in
   the verification report.
 

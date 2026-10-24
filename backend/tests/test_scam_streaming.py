@@ -58,6 +58,11 @@ def mock_gateway(mock_graph_detector: GraphDetector) -> DetectorGateway:
     risk_engine = TransactionRiskEngine(mock_graph_detector)
 
     def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/assess-financial":
+            from financial import assess_financial
+            body = json.loads(request.content)
+            txs = [GraphTx.model_validate(tx) for tx in body["transactions"]]
+            return httpx.Response(200, json=assess_financial(mock_graph_detector, txs, []).model_dump(mode="json"))
         if request.url.path == "/analyze":
             body = json.loads(request.content)
             txs = [GraphTx.model_validate(x) for x in body]
@@ -192,6 +197,8 @@ def test_scam_alert_emission_on_threshold_exceeded(client: TestClient) -> None:
         assert ws.receive_json()["event_type"] == "transaction.scored"
 
         scam_scored = ws.receive_json()
+        if scam_scored["event_type"] == "alert.created":
+            scam_scored = ws.receive_json()
         assert scam_scored["event_type"] == "transaction.scam_scored"
         assert scam_scored["data"]["scam_score"] >= 70.0
 
@@ -237,6 +244,14 @@ def test_idempotent_duplicate_suppression_for_scam_scoring(client: TestClient) -
 def test_scam_detector_failure_resilience(isolated_store: ArgusStore, isolated_manager: WebSocketManager) -> None:
     """When specialist scoring fails, transaction is still safely persisted and failure event is broadcast."""
     def failing_handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/assess-financial":
+            from backend.app.models import Transaction, GraphSignal
+            from backend.tests.financial_fixtures import assessment_for
+            txs = [Transaction.model_validate(tx) for tx in json.loads(request.content)["transactions"]]
+            graph = GraphSignal(signal_id="GRAPH-MOCK", timestamp=txs[-1].timestamp,
+                                risk_score=0.05, anomaly_type="low_risk_activity",
+                                suspicious_accounts=[], suspicious_transactions=[], related_ips=[], reasons=["Normal activity"])
+            return httpx.Response(200, json=assessment_for(txs, graph).model_dump(mode="json"))
         if request.url.path == "/analyze":
             return httpx.Response(200, json={
                 "signal_id": "GRAPH-MOCK",
