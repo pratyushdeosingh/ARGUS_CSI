@@ -333,7 +333,7 @@ function IncidentPanel({ incident, phase }: { incident: Incident | null; phase: 
         </div>
         <span className="eyebrow">ARGUS CORRELATION ENGINE</span>
         <h2>No active incident</h2>
-        <p>Run an analysis to inspect financial and optional infrastructure evidence.</p>
+        <p>{phase >= 5 ? "Financial analysis is below the case threshold." : "Run an analysis to inspect financial and optional infrastructure evidence."}</p>
         <div className="correlation-idle">
           <CircleDot size={14} /> Waiting for correlated signals
         </div>
@@ -536,7 +536,7 @@ function App() {
       {
         phase: 1,
         time: attack ? formatTime(attack.transactions[0]?.timestamp ?? attack.graph_signal.timestamp) : "--:--:--",
-        title: "New device session",
+        title: "Payment context",
         detail: attack ? `${attack.transactions[0]?.device_id ?? "Unknown device"} · ${attack.transactions[0]?.ip_address ?? "Unknown IP"}` : "Awaiting data",
         icon: <Fingerprint size={15} />,
       },
@@ -544,20 +544,20 @@ function App() {
         phase: 2,
         time: attack ? formatTime(attack.transactions.at(-1)?.timestamp ?? attack.graph_signal.timestamp) : "--:--:--",
         title: humanize(attack?.graph_signal.anomaly_type ?? "Transaction sequence"),
-        detail: suspiciousAccounts.slice(0, 4).join(", ") || "Awaiting graph analysis",
+        detail: suspiciousAccounts.slice(0, 4).join(", ") || (attack ? "No suspicious accounts" : "Awaiting graph analysis"),
         icon: <Zap size={15} />,
       },
       {
         phase: 3,
         time: attack ? formatTime(attack.graph_signal.timestamp) : "--:--:--",
-        title: "Graph anomaly detected",
+        title: "Financial analysis",
         detail: `Financial risk ${Math.round((attack?.graph_signal.risk_score ?? 0) * 100)}/100`,
         icon: <Network size={15} />,
       },
       {
         phase: 4,
         time: attack?.system_signal ? formatTime(attack.system_signal.timestamp) : "--:--:--",
-        title: "System anomaly detected",
+        title: "Infrastructure analysis",
         detail: attack?.system_signal ? `Infrastructure risk ${Math.round(attack.system_signal.risk_score * 100)}/100` : "No infrastructure evidence supplied",
         icon: <Cpu size={15} />,
       },
@@ -574,6 +574,9 @@ function App() {
 
   const detectorsHealthy = detectorStatus?.graph.availability === "online"
     && (detectorStatus.system.availability === "online" || detectorStatus.system.origin === "none");
+  const phaseLabel = phase === 5 && attack
+    ? incident?.case_type === "financial" ? "Financial case created" : incident ? "Signals correlated" : "Financial analysis complete"
+    : PHASE_LABELS[phase];
 
   return (
     <div className={classNames("app-shell", phase >= 5 && phase < 6 && "critical-mode")}>
@@ -618,7 +621,7 @@ function App() {
             </span>
             <div>
               <span className="eyebrow">CURRENT OPERATING STATE</span>
-              <h1>{PHASE_LABELS[phase]}</h1>
+                <h1>{phaseLabel}</h1>
             </div>
           </div>
           <div className="command-stats">
@@ -632,7 +635,7 @@ function App() {
             </button>
             <button className="simulate-button" onClick={() => void startAttack()} disabled={loading || (phase > 0 && phase < 6)}>
               {loading ? <RefreshCw size={17} className="spin" /> : <Play size={17} fill="currentColor" />}
-              {phase === 0 || phase === 6 ? "CANONICAL DEMO" : "ANALYSIS ACTIVE"}
+              {phase === 0 || phase === 6 ? "CANONICAL DEMO" : phase === 5 ? "ANALYSIS COMPLETE" : "ANALYSIS ACTIVE"}
             </button>
           </div>
         </section>
@@ -690,7 +693,7 @@ function App() {
               <SignalCard
                 icon={<Network size={19} />}
                 eyebrow="PRATHAM · GRAPH ML"
-                title="Mule network anomaly"
+                title={attack ? humanize(attack.graph_signal.anomaly_type) : "Financial analysis"}
                 score={attack?.graph_signal.risk_score ?? 0}
                 findings={attack?.graph_signal.reasons ?? []}
                 visible={graphVisible}

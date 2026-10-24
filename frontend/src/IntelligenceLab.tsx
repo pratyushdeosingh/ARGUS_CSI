@@ -131,7 +131,7 @@ export function IntelligenceLab({ open, incidents, onClose, onAnalyze }: Intelli
                   <div><span>{result.incident?.case_type === "financial" ? "Case risk" : "Confidence"}</span><strong>{result.incident ? Math.round(result.incident.confidence * 100) : "—"}</strong></div>
                 </div>
                 <div className={`result-verdict ${result.incident?.severity ?? "informational"}`}>
-                  <span>{result.incident ? result.incident.severity.toUpperCase() : "GRAPH-ONLY"}</span>
+                  <span>{result.incident ? result.incident.severity.toUpperCase() : result.financial_assessment ? "BELOW CASE THRESHOLD" : "GRAPH-ONLY"}</span>
                   <strong>{result.incident?.verdict.replaceAll("_", " ") ?? result.graph_signal.anomaly_type.replaceAll("_", " ")}</strong>
                   <p>{result.incident?.summary ?? "Financial analysis completed below the case threshold; no high-risk case created."}</p>
                 </div>
