@@ -1,777 +1,1094 @@
-import type { Core } from "cytoscape";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity,
-  AlertTriangle,
-  ArrowRight,
-  Ban,
-  Check,
+  ArrowDownLeft,
+  ArrowUpRight,
+  Bell,
   ChevronRight,
-  CircleDot,
-  Clock3,
-  Cpu,
-  Database,
+  CircleHelp,
   FlaskConical,
-  Fingerprint,
-  LockKeyhole,
+  LayoutDashboard,
   Network,
+  Pause,
   Play,
-  Radar,
   RefreshCw,
-  ServerCog,
+  Search,
   Shield,
-  ShieldAlert,
-  ShieldCheck,
-  UserCheck,
-  Wifi,
-  X,
-  Zap,
+  SlidersHorizontal,
+  Wallet,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-
+import CanonicalDemo from "./CanonicalDemo";
+import { IntelligenceLab } from "./IntelligenceLab";
 import {
   analyzeData,
   approveIncident,
   loadAuditEvents,
   loadDetectorStatus,
   loadIncidents,
-  loadNormalState,
-  loadPlatformMetrics,
-  simulateAttack,
 } from "./api";
-import { IntelligenceLab } from "./IntelligenceLab";
-import type {
-  AnalysisRequest,
-  AnalysisResponse,
-  AttackResponse,
-  AuditEvent,
-  DetectorComponentStatus,
-  DetectorStatus,
-  Incident,
-  PlatformMetrics,
-  Transaction,
-} from "./types";
+import { detectionLabel, neighborhood, type Alert } from "./monitoring";
+import {
+  DATA_SOURCES,
+  SCENARIOS,
+  type RunConfig,
+  type ScenarioId,
+} from "./simulation";
+import { useMonitoring } from "./useMonitoring";
+import { MoneyGraph } from "./MoneyGraph";
+import type { AuditEvent, DetectorStatus, Incident } from "./types";
+export { detectorSourceLabel } from "./CanonicalDemo";
 
-type DemoPhase = 0 | 1 | 2 | 3 | 4 | 5 | 6;
-
-const PHASE_LABELS = [
-  "Environment secure",
-  "Account compromise",
-  "Mule transfers",
-  "Graph anomaly",
-  "System anomaly",
-  "Attack correlated",
-  "Threat contained",
-] as const;
-
-const NORMAL_TRANSACTIONS: Transaction[] = [
-  {
-    transaction_id: "TX-0001",
-    timestamp: "2026-08-17T15:20:00Z",
-    source_account: "ACC-101",
-    destination_account: "ACC-050",
-    amount: 1250,
-    currency: "INR",
-    device_id: "DEV-01",
-    ip_address: "203.0.113.10",
-    status: "completed",
-  },
-];
-
-function classNames(...values: Array<string | false | null | undefined>) {
-  return values.filter(Boolean).join(" ");
-}
-
-function formatCurrency(amount: number) {
-  return new Intl.NumberFormat("en-IN", {
+type Page =
+  | "Overview"
+  | "Transactions"
+  | "Alerts"
+  | "Investigations"
+  | "Demo"
+  | "Lab";
+const currency = (value: number) =>
+  new Intl.NumberFormat("en-IN", {
     style: "currency",
     currency: "INR",
-    maximumFractionDigits: 0,
-  }).format(amount);
-}
-
-function humanize(value: string) {
-  return value.replaceAll("_", " ").replace(/\b\w/g, (char) => char.toUpperCase());
-}
-
-function formatTime(timestamp: string) {
-  return new Intl.DateTimeFormat("en-GB", {
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: false,
+    maximumFractionDigits: 2,
+  }).format(value);
+const time = (value: string) =>
+  new Date(value).toLocaleTimeString("en-GB", {
     timeZone: "UTC",
-  }).format(new Date(timestamp));
-}
-
-export function detectorSourceLabel(status: DetectorComponentStatus | undefined) {
-  if (!status) return "CHECKING";
-  if (status.origin === "service" && status.mode !== "unknown") {
-    return `${status.mode.toUpperCase()} SERVICE`;
-  }
-  if (status.origin === "service") return "SERVICE";
-  if (status.origin === "last_known") return "LAST KNOWN";
-  if (status.origin === "fixture") return "FIXTURE";
-  return "UNAVAILABLE";
-}
-
-function TransactionGraph({
-  transactions,
-  suspiciousAccounts,
-  suspiciousTransactions,
-}: {
-  transactions: Transaction[];
-  suspiciousAccounts: string[];
-  suspiciousTransactions: string[];
-}) {
-  const containerRef = useRef<HTMLDivElement>(null);
-
+    hour12: false,
+  });
+const risk = (value?: number) =>
+  value === undefined ? "—" : `${Math.round(value)}/100`;
+const tone = (value?: number) =>
+  value === undefined
+    ? ""
+    : value >= 70
+      ? "danger"
+      : value >= 40
+        ? "warning"
+        : "healthy";
+const newConfig = (
+  scenario: ScenarioId = "mixed",
+  seed = 42017,
+  count = 400,
+  accounts = 100,
+): RunConfig => ({
+  session: `SYN-${crypto.randomUUID().slice(0, 8)}`,
+  scenario,
+  seed,
+  count,
+  accounts,
+  start: new Date().toISOString(),
+});
+const EMPTY: string[] = [];
+export default function App() {
+  const [page, setPage] = useState<Page>("Overview");
+  const [config, setConfig] = useState<RunConfig>(() => newConfig());
+  const [running, setRunning] = useState(true);
+  const [speed, setSpeed] = useState(2);
+  const [seed, setSeed] = useState(42017);
+  const [count, setCount] = useState(400);
+  const [accounts, setAccounts] = useState(100);
+  const [selectedId, setSelectedId] = useState("");
+  const [account, setAccount] = useState("");
+  const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState("all");
+  const [sort, setSort] = useState("newest");
+  const [tablePage, setTablePage] = useState(0);
+  const [status, setStatus] = useState<DetectorStatus | null>(null);
+  const [incidents, setIncidents] = useState<Incident[]>([]);
+  const [caseError, setCaseError] = useState("");
+  const [audit, setAudit] = useState<Record<string, AuditEvent[]>>({});
+  const [canonical, setCanonical] = useState(false);
+  const [labOpen, setLabOpen] = useState(false);
+  const [caseBusy, setCaseBusy] = useState(false);
+  const complete = useCallback(() => setRunning(false), []);
+  const { state, connection, error, cursor, records } = useMonitoring(
+    config,
+    running,
+    speed,
+    complete,
+  );
+  const refresh = useCallback(() => {
+    void loadDetectorStatus()
+      .then(setStatus)
+      .catch(() => setStatus(null));
+    void loadIncidents(50)
+      .then((value) => {
+        setIncidents(value);
+        setCaseError("");
+      })
+      .catch(() => setCaseError("Persisted investigations unavailable."));
+  }, []);
   useEffect(() => {
-    if (!containerRef.current) return;
-
-    let graph: Core | undefined;
-    let resizeObserver: ResizeObserver | undefined;
-    let cancelled = false;
-
-    const accountIds = Array.from(
-      new Set(
-        transactions.flatMap((transaction) => [
-          transaction.source_account,
-          transaction.destination_account,
-        ]),
+    refresh();
+    const timer = setInterval(refresh, 30000);
+    return () => clearInterval(timer);
+  }, [refresh]);
+  const transactions = useMemo(
+    () =>
+      Object.values(state.transactions).sort((a, b) =>
+        b.timestamp.localeCompare(a.timestamp),
       ),
-    );
-    const suspicious = new Set(suspiciousAccounts);
-    const suspiciousEdges = new Set(suspiciousTransactions);
-    const elements = [
-      ...accountIds.map((account) => ({
-        data: { id: account, label: account },
-        classes: suspicious.has(account) ? "suspicious" : "normal",
-      })),
-      ...transactions.map((transaction) => ({
-        data: {
-          id: transaction.transaction_id,
-          source: transaction.source_account,
-          target: transaction.destination_account,
-          label: formatCurrency(transaction.amount),
-        },
-        classes: suspiciousEdges.has(transaction.transaction_id) ? "attack-edge" : "normal-edge",
-      })),
-    ];
-
-    const renderGraph = async () => {
-      const { default: cytoscape } = await import("cytoscape");
-      if (cancelled || !containerRef.current) return;
-
-      graph = cytoscape({
-        container: containerRef.current,
-        elements,
-        userZoomingEnabled: true,
-        minZoom: 0.65,
-        maxZoom: 1.6,
-        style: [
-        {
-          selector: "node",
-          style: {
-            width: 58,
-            height: 58,
-            label: "data(label)",
-            color: "#d8e7e2",
-            "font-size": 10,
-            "font-family": "IBM Plex Mono, monospace",
-            "font-weight": 600,
-            "text-valign": "center",
-            "text-halign": "center",
-            "background-color": "#142b27",
-            "border-color": "#2e7566",
-            "border-width": 2,
-          },
-        },
-        {
-          selector: "node.suspicious",
-          style: {
-            "background-color": "#321716",
-            "border-color": "#f06456",
-            color: "#ffd7d0",
-            "border-width": 3,
-          },
-        },
-        {
-          selector: "edge",
-          style: {
-            width: 2,
-            "curve-style": "bezier",
-            "target-arrow-shape": "triangle",
-            "arrow-scale": 0.8,
-            label: "data(label)",
-            color: "#809b94",
-            "font-size": 9,
-            "font-family": "IBM Plex Mono, monospace",
-            "text-background-color": "#0c1715",
-            "text-background-opacity": 1,
-            "text-background-padding": "3px",
-          },
-        },
-        {
-          selector: "edge.normal-edge",
-          style: {
-            "line-color": "#2e7566",
-            "target-arrow-color": "#2e7566",
-          },
-        },
-        {
-          selector: "edge.attack-edge",
-          style: {
-            "line-color": "#e04f43",
-            "target-arrow-color": "#e04f43",
-            width: 3,
-          },
-        },
-        ],
-        layout: {
-          name: "breadthfirst",
-          directed: true,
-          spacingFactor: 1.25,
-          padding: 24,
-        },
-      });
-
-      resizeObserver = new ResizeObserver(() => {
-        graph?.resize();
-        graph?.fit(undefined, 24);
-      });
-      resizeObserver.observe(containerRef.current);
-    };
-
-    void renderGraph();
-
-    return () => {
-      cancelled = true;
-      resizeObserver?.disconnect();
-      graph?.destroy();
-    };
-  }, [suspiciousAccounts, suspiciousTransactions, transactions]);
-
-  return <div className="graph-canvas" ref={containerRef} aria-label="Transaction network graph" />;
-}
-
-function ScoreBar({ score, tone }: { score: number; tone: "mint" | "danger" }) {
-  return (
-    <div className="score-wrap">
-      <div className="score-track" aria-label={`Risk score ${Math.round(score * 100)} out of 100`}>
-        <span className={`score-fill ${tone}`} style={{ width: `${score * 100}%` }} />
-      </div>
-      <strong>{Math.round(score * 100)}</strong>
-      <span>/100</span>
-    </div>
+    [state.transactions],
   );
-}
-
-function SignalCard({
-  icon,
-  eyebrow,
-  title,
-  score,
-  findings,
-  visible,
-  status,
-}: {
-  icon: React.ReactNode;
-  eyebrow: string;
-  title: string;
-  score: number;
-  findings: string[];
-  visible: boolean;
-  status?: DetectorComponentStatus;
-}) {
-  return (
-    <article className={classNames("signal-card", visible && "visible")}>
-      <div className="signal-heading">
-        <span className="icon-box">{icon}</span>
-        <div>
-          <span className="eyebrow">{eyebrow}</span>
-          <h3>{visible ? title : "Signal nominal"}</h3>
-        </div>
-        <span
-          className={classNames("source-pill", status?.availability ?? "offline")}
-          title={status?.detail}
-        >
-          {detectorSourceLabel(status)}
-        </span>
-      </div>
-      {status && status.availability !== "online" && (
-        <div className="detector-notice" role="status">
-          <AlertTriangle size={13} />
-          <span>{status.detail}</span>
-        </div>
-      )}
-      <ScoreBar score={visible ? score : 0.08} tone={visible ? "danger" : "mint"} />
-      <ul className="finding-list">
-        {(visible ? findings : ["No anomalous behavior detected", "Baseline profile active"]).map(
-          (finding) => (
-            <li key={finding}>
-              {visible ? <AlertTriangle size={14} /> : <Check size={14} />}
-              <span>{finding}</span>
-            </li>
-          ),
-        )}
-      </ul>
-    </article>
+  const selected = selectedId ? state.transactions[selectedId] : transactions[0];
+  const detection = selected
+    ? state.detections[selected.transaction_id]
+    : undefined;
+  const truth = useMemo(
+    () =>
+      new Map(
+        records.map((record) => [record.transaction.transaction_id, record]),
+      ),
+    [records],
   );
-}
-
-function IncidentPanel({ incident, phase }: { incident: Incident | null; phase: DemoPhase }) {
-  if (!incident || phase < 5) {
+  const alerts = useMemo(
+    () =>
+      Object.values(state.alerts).sort(
+        (a, b) =>
+          (({ critical: 3, high: 2, warning: 1 })[b.severity] ?? 0) -
+            ({ critical: 3, high: 2, warning: 1 }[a.severity] ?? 0) ||
+          b.timestamp.localeCompare(a.timestamp),
+      ),
+    [state.alerts],
+  );
+  const previousNeighborhood = useRef<ReturnType<typeof neighborhood>>([]);
+  const related = useMemo(() => {
+    const next = neighborhood(transactions, selected);
+    const previous = previousNeighborhood.current;
+    if (
+      next.length === previous.length &&
+      next.every((t, i) => t === previous[i])
+    )
+      return previous;
+    previousNeighborhood.current = next;
+    return next;
+  }, [transactions, selected]);
+  const suspicious = detection?.suspiciousAccounts ?? EMPTY;
+  const choose = useCallback((id: string) => {
+    setSelectedId(id);
+    setAccount("");
+  }, []);
+  const filtered = useMemo(
+    () =>
+      transactions
+        .filter((t) => {
+          const label = detectionLabel(state.detections[t.transaction_id]);
+          return (
+            `${t.transaction_id} ${t.source_account} ${t.destination_account} ${truth.get(t.transaction_id)?.category}`
+              .toLowerCase()
+              .includes(query.toLowerCase()) &&
+            (filter === "all" || filter === t.status || filter === label)
+          );
+        })
+        .sort((a, b) =>
+          sort === "amount"
+            ? b.amount - a.amount
+            : sort === "oldest"
+              ? a.timestamp.localeCompare(b.timestamp)
+              : b.timestamp.localeCompare(a.timestamp),
+        ),
+    [transactions, state.detections, query, filter, sort, truth],
+  );
+  const shown = filtered.slice(tablePage * 12, tablePage * 12 + 12);
+  useEffect(() => setTablePage(0), [query, filter, sort, config]);
+  const flagged = transactions.filter(
+    (t) => detectionLabel(state.detections[t.transaction_id]) === "Flagged",
+  ).length;
+  const scenario = SCENARIOS.find((s) => s.id === config.scenario)!;
+  function reset(scenarioId = config.scenario, randomize = false) {
+    setRunning(false);
+    setSelectedId("");
+    setAccount("");
+    const nextSeed = randomize
+      ? crypto.getRandomValues(new Uint32Array(1))[0]
+      : seed;
+    setSeed(nextSeed);
+    setConfig({
+      ...newConfig(scenarioId, nextSeed, count, accounts),
+      start: config.start,
+    });
+  }
+  function alertItem(item: Alert) {
     return (
-      <section className="panel incident-panel empty-incident">
-        <div className="empty-radar">
-          <Radar size={38} strokeWidth={1.4} />
-          <span />
+      <button
+        key={item.id}
+        className={`m-alert ${selected?.transaction_id === item.transactionId ? "active" : ""}`}
+        onClick={() => {
+          choose(item.transactionId);
+          if (page === "Alerts") setPage("Overview");
+        }}
+      >
+        <span className={`m-alert-dot ${item.severity}`} />
+        <div>
+          <strong>{item.type}</strong>
+          <small className="m-mono">{item.transactionId}</small>
+          <p>{item.message}</p>
+          <small>{item.evidence.slice(0, 2).join(" · ")}</small>
+          <time>{time(item.timestamp)} UTC</time>
         </div>
-        <span className="eyebrow">ARGUS CORRELATION ENGINE</span>
-        <h2>No active incident</h2>
-        <p>Run an analysis to inspect financial and optional infrastructure evidence.</p>
-        <div className="correlation-idle">
-          <CircleDot size={14} /> Waiting for correlated signals
-        </div>
-      </section>
+        <ChevronRight size={14} />
+      </button>
     );
   }
-
-  return (
-    <section className={classNames("panel incident-panel", phase === 6 && "contained")}>
-      <div className="incident-topline">
-        <span className={classNames("severity-pill", phase === 6 && "safe")}>
-          {phase === 6 ? <ShieldCheck size={14} /> : <ShieldAlert size={14} />}
-          {phase === 6 ? "CONTAINED" : incident.severity.toUpperCase()}
+  const table = (
+    <section className="m-panel m-transactions">
+      <div className="m-panel-title">
+        <div>
+          <h2>
+            {page === "Transactions"
+              ? "Transaction history"
+              : "Live transactions"}{" "}
+            <span className="m-count">{transactions.length}</span>
+          </h2>
+          <p>Current synthetic run · latest 1,000 records retained</p>
+        </div>
+        <span className="m-pill">
+          <i className={running ? "m-dot" : ""} />
+          {running ? "Streaming" : "Paused"}
         </span>
-        <span className="mono muted">{incident.incident_id}</span>
       </div>
-      <span className="eyebrow">ARGUS VERDICT</span>
-      <h2>{phase === 6 ? "Coordinated attack contained" : "Coordinated attack detected"}</h2>
-      <div className="confidence-row">
-        <span>Correlation confidence</span>
-        <strong>{Math.round(incident.confidence * 100)}%</strong>
+      <div className="m-filters">
+        <label className="m-search">
+          <Search size={14} />
+          <input
+            aria-label="Search transactions"
+            placeholder="Search ID, account or payment type…"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+        </label>
+        <select
+          aria-label="Filter transactions"
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+        >
+          <option value="all">All statuses</option>
+          {[
+            "pending",
+            "completed",
+            "cancelled",
+            "Flagged",
+            "Cleared by analysis",
+            "Analysis failed",
+            "Not analyzed",
+          ].map((v) => (
+            <option key={v}>{v}</option>
+          ))}
+        </select>
+        <select
+          aria-label="Sort transactions"
+          value={sort}
+          onChange={(e) => setSort(e.target.value)}
+        >
+          <option value="newest">Newest first</option>
+          <option value="oldest">Oldest first</option>
+          <option value="amount">Highest amount</option>
+        </select>
       </div>
-      <div className="confidence-track">
-        <span style={{ width: `${incident.confidence * 100}%` }} />
-      </div>
-      <p className="incident-summary">{incident.summary}</p>
-      <div className="evidence-block">
-        <span className="eyebrow">SHARED EVIDENCE</span>
-        {incident.evidence.slice(-2).map((evidence) => (
-          <div className="evidence-row" key={evidence}>
-            <Fingerprint size={15} />
-            <span>{evidence}</span>
+      <div className="m-table-wrap">
+        <table>
+          <thead>
+            <tr>
+              {[
+                "Transaction / type",
+                "Time · UTC",
+                "Source → destination",
+                "Amount",
+                "Payment / detection",
+                "Graph risk",
+                "Scam risk",
+                "Alert",
+              ].map((v) => (
+                <th key={v}>{v}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {shown.map((t) => {
+              const d = state.detections[t.transaction_id];
+              const label = detectionLabel(d);
+              const alert = alerts.find(
+                (a) => a.transactionId === t.transaction_id,
+              );
+              return (
+                <tr
+                  key={t.transaction_id}
+                  className={
+                    selected?.transaction_id === t.transaction_id
+                      ? "selected"
+                      : ""
+                  }
+                  onClick={() => choose(t.transaction_id)}
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") choose(t.transaction_id);
+                  }}
+                  aria-selected={selected?.transaction_id === t.transaction_id}
+                >
+                  <td>
+                    <button
+                      className="m-row-link"
+                      onClick={() => choose(t.transaction_id)}
+                    >
+                      {t.transaction_id}
+                    </button>
+                    <small>
+                      {truth.get(t.transaction_id)?.category ??
+                        "Synthetic payment"}
+                    </small>
+                  </td>
+                  <td className="m-mono">{time(t.timestamp)}</td>
+                  <td className="m-mono">
+                    {t.source_account.split("-").at(-1)}{" "}
+                    <span className="m-muted">→</span>{" "}
+                    {t.destination_account.split("-").at(-1)}
+                  </td>
+                  <td className="m-amount">{currency(t.amount)}</td>
+                  <td>
+                    <span className={`m-status ${t.status}`}>{t.status}</span>
+                    <small className={label === "Flagged" ? "danger" : ""}>
+                      {label}
+                    </small>
+                  </td>
+                  <td className={tone(d?.graph)}>{risk(d?.graph)}</td>
+                  <td className={tone(d?.scam)}>{risk(d?.scam)}</td>
+                  <td>
+                    <span
+                      className={
+                        alert?.severity === "critical" ||
+                        alert?.severity === "high"
+                          ? "danger"
+                          : "m-muted"
+                      }
+                    >
+                      {alert?.severity ?? "—"}
+                    </span>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+        {!shown.length && (
+          <div className="m-empty">
+            <Wallet size={25} />
+            <h3>
+              {transactions.length
+                ? "No matching payments"
+                : "Ready to monitor"}
+            </h3>
+            <p>
+              {transactions.length
+                ? "Adjust your search or status filter."
+                : "Start the simulation. Payments will be ingested and scored by the backend."}
+            </p>
+            {!transactions.length && (
+              <button onClick={() => setRunning(true)}>Start simulation</button>
+            )}
           </div>
-        ))}
+        )}
+      </div>
+      <div className="m-table-footer">
+        <span>
+          {filtered.length
+            ? `${tablePage * 12 + 1}–${Math.min((tablePage + 1) * 12, filtered.length)}`
+            : "0"}{" "}
+          of {filtered.length} payments
+        </span>
+        <div>
+          <button
+            disabled={tablePage === 0}
+            onClick={() => setTablePage((p) => p - 1)}
+          >
+            Previous
+          </button>
+          <button
+            disabled={(tablePage + 1) * 12 >= filtered.length}
+            onClick={() => setTablePage((p) => p + 1)}
+          >
+            Next
+          </button>
+        </div>
       </div>
     </section>
   );
-}
-
-function App() {
-  const [phase, setPhase] = useState<DemoPhase>(0);
-  const [normalTransactions, setNormalTransactions] = useState<Transaction[]>(NORMAL_TRANSACTIONS);
-  const [attack, setAttack] = useState<AttackResponse | null>(null);
-  const [incident, setIncident] = useState<Incident | null>(null);
-  const [auditEvents, setAuditEvents] = useState<AuditEvent[]>([]);
-  const [detectorStatus, setDetectorStatus] = useState<DetectorStatus | null>(null);
-  const [metrics, setMetrics] = useState<PlatformMetrics | null>(null);
-  const [incidentHistory, setIncidentHistory] = useState<Incident[]>([]);
-  const [labOpen, setLabOpen] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [utcTime, setUtcTime] = useState(new Date());
-  const timersRef = useRef<number[]>([]);
-
-  const clearTimers = useCallback(() => {
-    timersRef.current.forEach((timer) => window.clearTimeout(timer));
-    timersRef.current = [];
-  }, []);
-
-  const refreshPlatform = useCallback(async () => {
-    const [nextMetrics, nextIncidents] = await Promise.all([
-      loadPlatformMetrics(),
-      loadIncidents(20),
-    ]);
-    setMetrics(nextMetrics);
-    setIncidentHistory(nextIncidents);
-  }, []);
-
-  const resetDemo = useCallback(async () => {
-    clearTimers();
-    setLoading(true);
-    setError(null);
-    try {
-      const [response, status, nextMetrics, nextIncidents] = await Promise.all([
-        loadNormalState(),
-        loadDetectorStatus(),
-        loadPlatformMetrics(),
-        loadIncidents(20),
-      ]);
-      setNormalTransactions(response.transactions);
-      setDetectorStatus(status);
-      setMetrics(nextMetrics);
-      setIncidentHistory(nextIncidents);
-      setAttack(null);
-      setIncident(null);
-      setAuditEvents([]);
-      setPhase(0);
-    } catch {
-      setError("ARGUS backend is offline. Start the FastAPI service on port 8000.");
-    } finally {
-      setLoading(false);
-    }
-  }, [clearTimers]);
-
-  const refreshDetectorStatus = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      setDetectorStatus(await loadDetectorStatus());
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Detector health check failed.");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void resetDemo();
-    const clock = window.setInterval(() => setUtcTime(new Date()), 1000);
-    return () => {
-      window.clearInterval(clock);
-      clearTimers();
-    };
-  }, [clearTimers, resetDemo]);
-
-  const startAttack = async () => {
-    clearTimers();
-    setLoading(true);
-    setError(null);
-    setAuditEvents([]);
-    try {
-      const response = await simulateAttack();
-      if (response.incident.status === "contained") {
-        setAuditEvents(await loadAuditEvents(response.incident.incident_id));
-      }
-      setAttack(response);
-      setDetectorStatus(response.detector_status);
-      setIncident(response.incident);
-      void refreshPlatform();
-      setPhase(1);
-      [2, 3, 4, 5].forEach((nextPhase, index) => {
-        timersRef.current.push(
-          window.setTimeout(() => setPhase(
-            nextPhase === 5 && response.incident.status === "contained" ? 6 : nextPhase as DemoPhase,
-          ), 850 * (index + 1)),
-        );
-      });
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Attack simulation failed.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const runCustomAnalysis = async (request: AnalysisRequest): Promise<AnalysisResponse> => {
-    clearTimers();
-    const response = await analyzeData(request);
-    setDetectorStatus(response.detector_status);
-    setAuditEvents([]);
-    if (response.system_signal && response.incident) {
-      setAttack({
-        mode: "attack",
-        transactions: response.transactions,
-        graph_signal: response.graph_signal,
-        system_signal: response.system_signal,
-        detector_status: response.detector_status,
-        incident: response.incident,
-      });
-      setIncident(response.incident);
-      if (response.incident.status === "contained") {
-        setAuditEvents(await loadAuditEvents(response.incident.incident_id));
-      }
-      setPhase(response.incident.status === "contained" ? 6 : 5);
-    }
-    await refreshPlatform();
-    return response;
-  };
-
-  const approve = async () => {
-    if (!incident) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const response = await approveIncident(incident.incident_id);
-      setIncident(response.incident);
-      setAuditEvents(response.audit_events);
-      setPhase(6);
-      await refreshPlatform();
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Containment approval failed.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const visibleTransactions = phase >= 2 && attack ? attack.transactions : normalTransactions;
-  const graphVisible = phase >= 3 && attack !== null;
-  const systemVisible = phase >= 4 && attack !== null;
-  const attackTotal = attack?.transactions.reduce((sum, transaction) => sum + transaction.amount, 0) ?? 0;
-  const suspiciousAccounts = attack?.graph_signal.suspicious_accounts ?? [];
-  const suspiciousTransactions = attack?.graph_signal.suspicious_transactions ?? [];
-  const originAccount = attack?.transactions[0]?.source_account ?? "—";
-  const deviceId = attack?.transactions[0]?.device_id ?? "—";
-
-  const timeline = useMemo(
-    () => [
-      {
-        phase: 1,
-        time: attack ? formatTime(attack.transactions[0]?.timestamp ?? attack.graph_signal.timestamp) : "--:--:--",
-        title: "New device session",
-        detail: attack ? `${attack.transactions[0]?.device_id ?? "Unknown device"} · ${attack.transactions[0]?.ip_address ?? "Unknown IP"}` : "Awaiting data",
-        icon: <Fingerprint size={15} />,
-      },
-      {
-        phase: 2,
-        time: attack ? formatTime(attack.transactions.at(-1)?.timestamp ?? attack.graph_signal.timestamp) : "--:--:--",
-        title: humanize(attack?.graph_signal.anomaly_type ?? "Transaction sequence"),
-        detail: suspiciousAccounts.slice(0, 4).join(" → ") || "Awaiting graph analysis",
-        icon: <Zap size={15} />,
-      },
-      {
-        phase: 3,
-        time: attack ? formatTime(attack.graph_signal.timestamp) : "--:--:--",
-        title: "Graph anomaly detected",
-        detail: `Financial risk ${Math.round((attack?.graph_signal.risk_score ?? 0) * 100)}/100`,
-        icon: <Network size={15} />,
-      },
-      {
-        phase: 4,
-        time: attack ? formatTime(attack.system_signal.timestamp) : "--:--:--",
-        title: "System anomaly detected",
-        detail: `Infrastructure risk ${Math.round((attack?.system_signal.risk_score ?? 0) * 100)}/100`,
-        icon: <Cpu size={15} />,
-      },
-      {
-        phase: 5,
-        time: incident ? formatTime(incident.timestamp) : "--:--:--",
-        title: "Signals correlated",
-        detail: incident ? `${humanize(incident.severity)} incident ${incident.incident_id}` : "Awaiting correlation",
-        icon: <ShieldAlert size={15} />,
-      },
-    ],
-    [attack, incident, suspiciousAccounts],
-  );
-
-  const detectorsHealthy = detectorStatus?.graph.availability === "online"
-    && detectorStatus.system.availability === "online";
-
-  return (
-    <div className={classNames("app-shell", phase >= 5 && phase < 6 && "critical-mode")}>
-      <header className="topbar">
-        <div className="brand">
-          <span className="brand-mark"><Shield size={22} /></span>
-          <div>
-            <strong>ARGUS</strong>
-            <span>FINANCIAL SOC</span>
+  const details = (
+    <section className="m-panel m-details">
+      <div className="m-panel-title">
+        <div>
+          <h2>Investigation details</h2>
+          <p>Payment record & detector evidence</p>
+        </div>
+        <Shield size={17} />
+      </div>
+      {selected ? (
+        <>
+          <div className="m-detail-amount">
+            {currency(selected.amount)}
+            <span className={`m-status ${selected.status}`}>
+              {selected.status}
+            </span>
           </div>
-        </div>
-        <div className="topbar-center">
-          <span className={classNames("system-status", detectorStatus && !detectorsHealthy && "degraded")}>
-            <i /> {detectorsHealthy ? "SYSTEM OPERATIONAL" : detectorStatus ? "DETECTORS DEGRADED" : "CHECKING SERVICES"}
-          </span>
-          <span className="environment">FINANCIAL INTELLIGENCE · SYNTHETIC LAB</span>
-        </div>
-        <div className="topbar-actions">
-          <span className="utc-clock"><Clock3 size={14} /> {utcTime.toISOString().slice(11, 19)} UTC</span>
-          <button className="icon-button" onClick={() => void resetDemo()} aria-label="Reset demonstration" disabled={loading}>
-            <RefreshCw size={16} className={loading ? "spin" : ""} />
-          </button>
-          <button className="icon-button" onClick={() => void refreshDetectorStatus()} aria-label="Retry detector health checks" disabled={loading} title="Retry detector health checks">
-            <Activity size={16} />
-          </button>
-        </div>
-      </header>
-
-      {error && (
-        <div className="error-banner" role="alert">
-          <AlertTriangle size={16} />
-          <span>{error}</span>
-          <button onClick={() => setError(null)} aria-label="Dismiss error"><X size={16} /></button>
+          <div className="m-transfer">
+            <span>
+              <ArrowUpRight size={14} /> From
+              <strong>{selected.source_account}</strong>
+            </span>
+            <span>
+              <ArrowDownLeft size={14} /> To
+              <strong>{selected.destination_account}</strong>
+            </span>
+          </div>
+          <dl>
+            <dt>Transaction</dt>
+            <dd className="m-mono">{selected.transaction_id}</dd>
+            <dt>Timestamp</dt>
+            <dd>
+              {new Date(selected.timestamp)
+                .toISOString()
+                .replace("T", " ")
+                .slice(0, 19)}{" "}
+              UTC
+            </dd>
+            <dt>Detection status</dt>
+            <dd>{detectionLabel(detection)}</dd>
+            <dt>Risk severity</dt>
+            <dd>{alerts.find(a => a.transactionId === selected.transaction_id)?.severity ?? (detection?.combined === undefined ? "Unavailable" : detection.combined >= 70 ? "High" : detection.combined >= 40 ? "Moderate" : "Low")}</dd>
+            <dt>Detector decision</dt><dd>{detection?.decision || "Unavailable"}</dd>
+            <dt>Analyst action</dt>
+            <dd>None recorded</dd>
+            <dt>Synthetic truth</dt>
+            <dd>
+              {truth.get(selected.transaction_id)?.truth ?? "Unavailable"}
+            </dd>
+          </dl>
+          <div className="m-scores">
+            {[
+              ["Graph", detection?.graph],
+              ["Scam", detection?.scam],
+              ["Combined", detection?.combined],
+            ].map(([name, value]) => (
+              <div key={String(name)}>
+                <span>{name}</span>
+                <strong className={tone(value as number | undefined)}>
+                  {risk(value as number | undefined)}
+                </strong>
+                <i>
+                  <b style={{ width: `${value ?? 0}%` }} />
+                </i>
+              </div>
+            ))}
+          </div>
+          <p className="m-score-note">
+            Scores are detector outputs, not calibrated probabilities. Graph risk describes the rolling session window (0–1 normalized to 100), not an individual payment. A graph flag requires this transaction in the detector’s suspicious transaction list. Specialist scores use 0–100.
+          </p>
+          <h3>Evidence</h3>
+          {[
+            ...new Set([
+              ...(detection?.reasons ?? []),
+              ...(detection?.scamReasons ?? []),
+            ]),
+          ].length ? (
+            <ul className="m-evidence">
+              {[
+                ...new Set([
+                  ...(detection?.reasons ?? []),
+                  ...(detection?.scamReasons ?? []),
+                ]),
+              ].map((reason) => (
+                <li key={reason}>{reason}</li>
+              ))}
+            </ul>
+          ) : (
+            <p className="m-muted">
+              No detector evidence received. A missing score does not mean a
+              payment is safe.
+            </p>
+          )}
+          {suspicious.length > 0 && (
+            <p className="m-muted">
+              Detector-identified accounts:{" "}
+              {suspicious.map((a) => a.split("-").at(-1)).join(", ")}. This is a
+              suspicious pattern, not a confirmed mule classification.
+            </p>
+          )}
+          {account && (
+            <div className="m-account">
+              <h3>Selected account · {account.split("-").at(-1)}</h3>
+              <p className="m-mono">{account}</p>
+              <p>
+                {
+                  transactions.filter(
+                    (t) =>
+                      t.source_account === account ||
+                      t.destination_account === account,
+                  ).length
+                }{" "}
+                payments in retained history.
+              </p>
+            </div>
+          )}
+          <h3>
+            Connected payments <span className="m-count">{related.length}</span>
+          </h3>
+          <div className="m-related">
+            {related.slice(0, 6).map((t) => (
+              <button
+                key={t.transaction_id}
+                onClick={() => choose(t.transaction_id)}
+              >
+                <span>
+                  {t.source_account.split("-").at(-1)} →{" "}
+                  {t.destination_account.split("-").at(-1)}
+                </span>
+                <strong>{currency(t.amount)}</strong>
+                <ChevronRight size={12} />
+              </button>
+            ))}
+          </div>
+        </>
+      ) : (
+        <div className="m-empty">
+          <Search size={24} />
+          <h3>Select a transaction</h3>
+          <p>
+            Inspect payment status, account relationships and actual detector
+            evidence here.
+          </p>
         </div>
       )}
-
-      <main>
-        <section className="command-strip">
-          <div className="command-copy">
-            <span className={classNames("threat-orb", phase >= 1 && phase < 6 && "alert", phase === 6 && "safe")}>
-              {phase === 6 ? <ShieldCheck size={24} /> : phase >= 1 ? <ShieldAlert size={24} /> : <Radar size={24} />}
-            </span>
+    </section>
+  );
+  return (
+    <div className="m-app">
+      <aside className="m-sidebar">
+        <div className="m-brand">
+          <span>
+            <Shield size={22} />
+          </span>
+          <strong>
+            ARGUS<small>FINANCIAL INTELLIGENCE</small>
+          </strong>
+        </div>
+        <span className="m-nav-label">WORKSPACE</span>
+        <nav>
+          {(
+            [
+              ["Overview", LayoutDashboard],
+              ["Transactions", Wallet],
+              ["Alerts", Bell],
+              ["Investigations", Network],
+              ["Demo", SlidersHorizontal],
+              ["Lab", FlaskConical],
+            ] as const
+          ).map(([name, Icon]) => (
+            <button
+              key={name}
+              className={page === name ? "active" : ""}
+              onClick={() => {
+                setPage(name);
+                setCanonical(false);
+                if (name === "Lab") setLabOpen(true);
+              }}
+            >
+              <Icon size={17} />
+              {name}
+              {name === "Alerts" && alerts.length > 0 && (
+                <span>{alerts.length}</span>
+              )}
+            </button>
+          ))}
+        </nav>
+        <div className="m-sidebar-bottom">
+          <span className="m-synthetic">
+            <i /> Synthetic environment
+          </span>
+          <p>
+            Generated payments.
+            <br />
+            Actual detector outputs.
+          </p>
+          <div className="m-analyst">
+            <span>AN</span>
             <div>
-              <span className="eyebrow">CURRENT OPERATING STATE</span>
-              <h1>{PHASE_LABELS[phase]}</h1>
+              Analyst workspace<small>Local demonstration</small>
             </div>
           </div>
-          <div className="command-stats">
-            <div><span>Accounts observed</span><strong>{metrics?.accounts_observed.toLocaleString() ?? "—"}</strong></div>
-            <div><span>Transactions ingested</span><strong>{metrics?.transactions_ingested.toLocaleString() ?? "—"}</strong></div>
-            <div><span>Open incidents</span><strong className={(metrics?.incidents_open ?? 0) > 0 ? "danger-text" : ""}>{metrics?.incidents_open.toLocaleString() ?? "—"}</strong></div>
+        </div>
+      </aside>
+      <div className="m-workspace">
+        <header className="m-header">
+          <div>
+            <span>Workspace</span>
+            <ChevronRight size={13} />
+            <strong>{page}</strong>
           </div>
-          <div className="command-actions">
-            <button className="lab-button" onClick={() => setLabOpen(true)}>
-              <FlaskConical size={17} /> DATA LAB
+          <div>
+            <span
+              className={`m-connection ${connection === "Connected" ? "healthy" : "warning"}`}
+            >
+              <i />
+              {connection}
+            </span>
+            <button onClick={refresh} aria-label="Refresh detector health">
+              <RefreshCw size={15} />
             </button>
-            <button className="simulate-button" onClick={() => void startAttack()} disabled={loading || (phase > 0 && phase < 6)}>
-              {loading ? <RefreshCw size={17} className="spin" /> : <Play size={17} fill="currentColor" />}
-              {phase === 0 || phase === 6 ? "CANONICAL DEMO" : "ANALYSIS ACTIVE"}
-            </button>
+            <span className="m-avatar">AN</span>
           </div>
-        </section>
-
-        <section className="dashboard-grid">
-          <aside className="left-column">
-            <section className="panel timeline-panel">
-              <div className="panel-heading">
-                <div><span className="eyebrow">ANALYSIS SEQUENCE</span><h2>Analysis timeline</h2></div>
-                <Activity size={18} />
-              </div>
-              <div className="timeline">
-                <div className="timeline-event active normal-event">
-                  <span className="timeline-dot"><Check size={13} /></span>
-                  <div><time>15:29:42</time><strong>Baseline verified</strong><p>Behavior within expected range</p></div>
-                </div>
-                {timeline.map((event) => (
-                  <div className={classNames("timeline-event", phase >= event.phase && "active", phase === 6 && event.phase < 5 && "resolved")} key={event.title}>
-                    <span className="timeline-dot">{event.icon}</span>
-                    <div><time>{event.time}</time><strong>{event.title}</strong><p>{event.detail}</p></div>
-                  </div>
-                ))}
-              </div>
-            </section>
-
-            <section className="panel asset-panel">
-              <div className="panel-heading compact">
-                <div><span className="eyebrow">AT-RISK VALUE</span><h2>{formatCurrency(phase >= 2 ? attackTotal : 0)}</h2></div>
-                <Database size={18} />
-              </div>
-              <div className="asset-row"><span>Origin account</span><strong>{phase >= 1 ? originAccount : "—"}</strong></div>
-              <div className="asset-row"><span>Suspicious transfers</span><strong>{phase >= 2 ? suspiciousTransactions.length : "0"}</strong></div>
-              <div className="asset-row"><span>Affected accounts</span><strong>{phase >= 2 ? suspiciousAccounts.length : "0"}</strong></div>
-            </section>
-          </aside>
-
-          <section className="center-column">
-            <section className="panel graph-panel">
-              <div className="panel-heading">
-                <div><span className="eyebrow">FINANCIAL INTELLIGENCE</span><h2>Transaction network</h2></div>
-                <div className="graph-legend"><span><i className="normal-node" /> Normal</span><span><i className="risk-node" /> Suspicious</span></div>
-              </div>
-              <TransactionGraph
-                transactions={visibleTransactions}
-                suspiciousAccounts={phase >= 2 && phase < 6 ? suspiciousAccounts : []}
-                suspiciousTransactions={phase >= 2 && phase < 6 ? suspiciousTransactions : []}
-              />
-              <div className="graph-footnote">
-                <span><Wifi size={14} /> {phase >= 1 ? `Observed device: ${deviceId}` : "Known devices only"}</span>
-                <span><Network size={14} /> {phase >= 2 ? `${visibleTransactions.length} linked transfers` : "No unusual paths"}</span>
-              </div>
-            </section>
-
-            <div className="signal-grid">
-              <SignalCard
-                icon={<Network size={19} />}
-                eyebrow="PRATHAM · GRAPH ML"
-                title="Mule network anomaly"
-                score={attack?.graph_signal.risk_score ?? 0}
-                findings={attack?.graph_signal.reasons ?? []}
-                visible={graphVisible}
-                status={detectorStatus?.graph}
-              />
-              <SignalCard
-                icon={<ServerCog size={19} />}
-                eyebrow="NITIN · eBPF"
-                title="Payment service anomaly"
-                score={attack?.system_signal.risk_score ?? 0}
-                findings={attack?.system_signal.indicators ?? []}
-                visible={systemVisible}
-                status={detectorStatus?.system}
-              />
+        </header>
+        <main className="m-main">
+          <section className="m-heading">
+            <div>
+              <span className="m-eyebrow">ARGUS CSI / MONITORING</span>
+              <h1>
+                {page === "Overview"
+                  ? "Financial activity overview"
+                  : page === "Demo"
+                    ? "Synthetic scenario library"
+                    : page === "Lab"
+                      ? "Intelligence Lab"
+                      : page}
+              </h1>
+              <p>
+                {page === "Overview"
+                  ? "Follow the money. Surface the signals. Investigate with context."
+                  : `Synthetic workspace · ${scenario.name}`}
+              </p>
+            </div>
+            <div className="m-source">
+              <button className="active">{DATA_SOURCES.synthetic.label}</button>
+              <button disabled title="No real transaction provider configured">
+                {DATA_SOURCES.real.label}
+              </button>
             </div>
           </section>
-
-          <aside className="right-column">
-            <IncidentPanel incident={incident} phase={phase} />
-
-            <section className="panel response-panel">
-              <div className="panel-heading">
-                <div><span className="eyebrow">RESPONSE POLICY</span><h2>Containment</h2></div>
-                <LockKeyhole size={18} />
+          {(error || caseError) && (
+            <div className="m-notice" role="alert">
+              {error || caseError}
+              <button onClick={refresh}>Retry health check</button>
+            </div>
+          )}
+          <section className="m-controls">
+            <div>
+              <span className={`m-status ${running ? "completed" : "pending"}`}>
+                {running
+                  ? "Running"
+                  : cursor >= records.length
+                    ? "Complete"
+                    : "Paused"}
+              </span>
+              <strong>{scenario.name}</strong>
+              <span className="m-muted">
+                Seed {config.seed} · {cursor}/{records.length} submitted
+              </span>
+            </div>
+            <div>
+              <select
+                aria-label="Simulation speed"
+                value={speed}
+                onChange={(e) => setSpeed(Number(e.target.value))}
+              >
+                <option value={0.5}>0.5 tx/s</option>
+                <option value={1}>1 tx/s</option>
+                <option value={2}>2 tx/s</option>
+                <option value={4}>4 tx/s max</option>
+              </select>
+              <button onClick={() => reset()} aria-label="Reset simulation">
+                <RefreshCw size={14} /> Reset
+              </button>
+              <button
+                className="m-primary"
+                disabled={cursor >= records.length}
+                onClick={() => setRunning((v) => !v)}
+              >
+                {running ? <Pause size={14} /> : <Play size={14} />}{" "}
+                {running ? "Pause" : cursor ? "Resume" : "Start simulation"}
+              </button>
+            </div>
+          </section>
+          {page === "Demo" ? (
+            <>
+              <div className="m-demo-config m-panel">
+                <h2>Configure a reproducible run</h2>
+                <p>
+                  Reset or replay creates a new isolated session. No existing
+                  data is deleted. One request at a time; selected speed is a
+                  maximum.
+                </p>
+                <div>
+                  <label>
+                    Random seed
+                    <input
+                      type="number"
+                      value={seed}
+                      onChange={(e) => setSeed(Number(e.target.value) || 0)}
+                    />
+                  </label>
+                  <label>
+                    Payments (20–5,000)
+                    <input
+                      type="number"
+                      min="20"
+                      max="5000"
+                      value={count}
+                      onChange={(e) =>
+                        setCount(
+                          Math.min(5000, Math.max(20, Number(e.target.value))),
+                        )
+                      }
+                    />
+                  </label>
+                  <label>
+                    Accounts (40–400)
+                    <input
+                      type="number"
+                      min="40"
+                      max="400"
+                      value={accounts}
+                      onChange={(e) =>
+                        setAccounts(
+                          Math.min(400, Math.max(40, Number(e.target.value))),
+                        )
+                      }
+                    />
+                  </label>
+                  <button onClick={() => reset()}>Apply & replay seed</button>
+                  <button onClick={() => reset("random", true)}>
+                    Randomize seed
+                  </button>
+                </div>
+                <small>
+                  Logical start: {config.start} · {config.session}. Scenario
+                  timestamps advance independently of network delivery speed.
+                </small>
               </div>
-              {incident && phase >= 5 ? (
-                <>
-                  <div className="action-list">
-                    {incident.recommended_actions.map((action) => (
-                      <div className="action-row" key={`${action.action}-${action.target}`}>
-                        <span className={classNames("action-icon", phase === 6 && "done")}>
-                          {phase === 6 ? <Check size={14} /> : action.action === "isolate_service" ? <Ban size={14} /> : <LockKeyhole size={14} />}
-                        </span>
-                        <div><strong>{humanize(action.action)}</strong><span>{action.target}</span></div>
-                        <span className="action-state">{phase === 6 ? "DONE" : "PENDING"}</span>
-                      </div>
-                    ))}
-                  </div>
-                  {phase === 5 && incident.status === "awaiting_approval" && (
-                    <button className="approve-button" onClick={() => void approve()} disabled={loading}>
-                      <UserCheck size={17} /> APPROVE CONTAINMENT <ChevronRight size={16} />
+              <div className="m-scenario-grid">
+                {SCENARIOS.map((s, i) => (
+                  <article
+                    className={`m-panel m-scenario ${config.scenario === s.id ? "active" : ""}`}
+                    key={s.id}
+                  >
+                    <span className="m-eyebrow">
+                      SCENARIO {String(i + 1).padStart(2, "0")}
+                    </span>
+                    <h2>{s.name}</h2>
+                    <p>{s.description}</p>
+                    <small>Expected pattern</small>
+                    <p>{s.expected}</p>
+                    <button
+                      onClick={() => {
+                        reset(s.id);
+                        setPage("Overview");
+                      }}
+                    >
+                      Load scenario <ChevronRight size={14} />
                     </button>
-                  )}
-                  {phase === 5 && incident.status === "monitoring" && (
-                    <div className="monitoring-banner"><Radar size={17} /> Monitoring policy active · no destructive action required</div>
-                  )}
-                  {phase === 6 && <div className="contained-banner"><ShieldCheck size={17} /> Containment executed successfully</div>}
-                </>
+                  </article>
+                ))}
+                <article className="m-panel m-scenario">
+                  <span className="m-eyebrow">LEGACY DEMONSTRATION</span>
+                  <h2>Canonical Demo</h2>
+                  <p>
+                    The original four-account financial and infrastructure
+                    correlation workflow, with its existing backend response
+                    controls.
+                  </p>
+                  <button onClick={() => setCanonical((v) => !v)}>
+                    {canonical ? "Close" : "Open"} Canonical Demo
+                  </button>
+                </article>
+              </div>
+              {canonical && (
+                <div className="m-legacy">
+                  <CanonicalDemo />
+                </div>
+              )}
+            </>
+          ) : page === "Investigations" ? (
+            <section className="m-panel m-cases">
+              <div className="m-panel-title">
+                <div>
+                  <h2>Persisted investigation cases</h2>
+                  <p>
+                    Backend cases across saved analyses · stream alerts remain
+                    separate
+                  </p>
+                </div>
+                <button onClick={refresh}>Refresh</button>
+              </div>
+              {incidents.length ? (
+                incidents.map((incident) => (
+                  <article key={incident.incident_id}>
+                    <div>
+                      <span
+                        className={`m-status ${incident.severity === "critical" ? "cancelled" : "pending"}`}
+                      >
+                        {incident.severity}
+                      </span>
+                      <span className="m-mono">{incident.incident_id}</span>
+                      <span className="m-muted">{incident.status}</span>
+                    </div>
+                    <h3>{incident.verdict.replaceAll("_", " ")}</h3>
+                    <p>{incident.summary}</p>
+                    <ul>
+                      {incident.evidence.map((e) => (
+                        <li key={e}>{e}</li>
+                      ))}
+                    </ul>
+                    <p>Accounts: {incident.affected_accounts.join(", ")}</p>
+                    {incident.recommended_actions.map((a) => (
+                      <p key={a.action + a.target}>
+                        Simulated response: {a.action} · {a.target} · {a.status}
+                      </p>
+                    ))}
+                    {incident.status === "awaiting_approval" && (
+                      <button
+                        disabled={caseBusy}
+                        onClick={() => {
+                          setCaseBusy(true);
+                          void approveIncident(incident.incident_id)
+                            .then((r) => {
+                              setAudit((v) => ({
+                                ...v,
+                                [incident.incident_id]: r.audit_events,
+                              }));
+                              refresh();
+                            })
+                            .catch((e) => setCaseError(String(e)))
+                            .finally(() => setCaseBusy(false));
+                        }}
+                      >
+                        Approve simulated containment
+                      </button>
+                    )}
+                    <button
+                      onClick={() =>
+                        void loadAuditEvents(incident.incident_id)
+                          .then((events) =>
+                            setAudit((v) => ({
+                              ...v,
+                              [incident.incident_id]: events,
+                            })),
+                          )
+                          .catch((e) => setCaseError(String(e)))
+                      }
+                    >
+                      View audit trail
+                    </button>
+                    {audit[incident.incident_id]?.map((e, i) => (
+                      <p key={i} className="m-muted">
+                        {e.timestamp} · {e.action} · {e.result}
+                      </p>
+                    ))}
+                  </article>
+                ))
               ) : (
-                <div className="response-empty">
-                  <ShieldCheck size={25} />
-                  <p>No response actions required</p>
-                  <span>Critical actions require analyst approval</span>
+                <div className="m-empty">
+                  <Network size={26} />
+                  <h3>No persisted cases available</h3>
+                  <p>
+                    Transaction scoring produces alerts. A persisted case
+                    requires the existing financial and infrastructure
+                    correlation workflow in the Canonical Demo or Lab.
+                  </p>
                 </div>
               )}
             </section>
-
-            <section className="panel audit-panel">
-              <div className="panel-heading compact">
-                <div><span className="eyebrow">AUDIT TRAIL</span><h2>Recent actions</h2></div>
-                <ArrowRight size={17} />
-              </div>
-              {auditEvents.length ? auditEvents.map((event) => (
-                <div className="audit-row" key={`${event.action}-${event.target}`}>
-                  <Check size={13} />
-                  <div><strong>{humanize(event.action)}</strong><span>{event.target} · {formatTime(event.timestamp)}</span></div>
-                </div>
-              )) : <p className="audit-empty">No containment actions recorded.</p>}
+          ) : page === "Lab" ? (
+            <section className="m-panel m-lab-intro">
+              <FlaskConical size={28} />
+              <h2>Analyze a dataset</h2>
+              <p>
+                Use the existing Intelligence Lab for JSON transactions,
+                baseline history and infrastructure correlation.
+              </p>
+              <button onClick={() => setLabOpen(true)}>
+                Open Intelligence Lab
+              </button>
             </section>
-          </aside>
-        </section>
-      </main>
-
-      <footer>
-        <span><i /> ARGUS CORE ONLINE</span>
-        <span title={detectorStatus?.graph.detail}>GRAPH DETECTOR · {detectorSourceLabel(detectorStatus?.graph)}</span>
-        <span title={detectorStatus?.system.detail}>eBPF SENSOR · {detectorSourceLabel(detectorStatus?.system)}</span>
-        <span className="mono">BUILD 1.0.0 · DATA-DRIVEN</span>
-      </footer>
-
+          ) : (
+            <>
+              <section className="m-kpis">
+                {[
+                  [
+                    "Transactions monitored",
+                    transactions.length,
+                    "Current run · retained history",
+                    Wallet,
+                  ],
+                  [
+                    "Flagged transactions",
+                    flagged,
+                    "Actual detector predictions",
+                    Shield,
+                  ],
+                  [
+                    "Active alerts",
+                    alerts.length,
+                    "Current run · latest 500 events",
+                    Bell,
+                  ],
+                  [
+                    "High-risk investigations",
+                    caseError
+                      ? "—"
+                      : incidents.filter(
+                          (i) =>
+                            (i.severity === "high" ||
+                              i.severity === "critical") &&
+                            i.status !== "contained",
+                        ).length,
+                    "Saved cases · latest 50",
+                    Network,
+                  ],
+                  [
+                    "Detector health",
+                    status
+                      ? `${[status.graph, status.system].filter((s) => s.availability === "online").length}/2`
+                      : "—",
+                    status
+                      ? `Graph: ${status.graph.origin} · System: ${status.system.origin}`
+                      : "Health unavailable",
+                    Activity,
+                  ],
+                ].map(([label, value, caption, Icon]) => {
+                  const Glyph = Icon as typeof Wallet;
+                  return (
+                    <article className="m-panel" key={String(label)}>
+                      <div>
+                        <span>{String(label)}</span>
+                        <Glyph size={16} />
+                      </div>
+                      <strong>{String(value)}</strong>
+                      <small>{String(caption)}</small>
+                    </article>
+                  );
+                })}
+              </section>
+              {page === "Alerts" ? (
+                <section className="m-panel">
+                  <div className="m-panel-title">
+                    <div>
+                      <h2>Alert evidence review</h2>
+                      <p>
+                        Severity then recency · selecting an alert opens its
+                        payment context
+                      </p>
+                    </div>
+                    <Bell size={18} />
+                  </div>
+                  {alerts.length ? (
+                    alerts.map(alertItem)
+                  ) : (
+                    <div className="m-empty">
+                      <Bell size={25} />
+                      <h3>No alerts received</h3>
+                      <p>
+                        Alerts appear when the backend detects a threshold
+                        breach or an analysis failure.
+                      </p>
+                    </div>
+                  )}
+                </section>
+              ) : (
+                <div
+                  className={
+                    page === "Transactions" ? "m-full-table" : "m-monitor-grid"
+                  }
+                >
+                  {table}
+                  {page !== "Transactions" && (
+                    <section className="m-panel m-alerts">
+                      <div className="m-panel-title">
+                        <div>
+                          <h2>
+                            Priority alert queue{" "}
+                            <span className="m-count">{alerts.length}</span>
+                          </h2>
+                          <p>Detector signals · current run</p>
+                        </div>
+                        <Bell size={17} />
+                      </div>
+                      <div className="m-alert-list">
+                        {alerts.length ? (
+                          alerts.slice(0, 30).map(alertItem)
+                        ) : (
+                          <div className="m-empty">
+                            <Shield size={25} />
+                            <h3>No alerts received</h3>
+                            <p>
+                              New graph, scam and availability alerts appear
+                              here.
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                      <button
+                        className="m-all-alerts"
+                        onClick={() => setPage("Alerts")}
+                      >
+                        View all alerts <ChevronRight size={13} />
+                      </button>
+                    </section>
+                  )}
+                </div>
+              )}
+              <div className="m-investigation-grid">
+                <section className="m-panel m-network">
+                  <div className="m-panel-title">
+                    <div>
+                      <h2>Money-flow investigation</h2>
+                      <p>
+                        {selected
+                          ? `${selected.transaction_id} · ${related.length} connected payments`
+                          : "Select a transaction to begin"}
+                      </p>
+                    </div>
+                    <span className="m-legend">
+                      <i /> Selected transfer
+                    </span>
+                  </div>
+                  <MoneyGraph
+                    transactions={related}
+                    selected={selected?.transaction_id}
+                    suspicious={suspicious}
+                    onTransaction={choose}
+                    onAccount={setAccount}
+                  />
+                  <div className="m-network-footer">
+                    <span>
+                      <i className="m-dot" /> Bounded account neighborhood · max
+                      28 transfers
+                    </span>
+                    <span>Click an account or transfer to inspect</span>
+                  </div>
+                </section>
+                {details}
+              </div>
+            </>
+          )}
+          <footer className="m-footer">
+            <span>
+              <Shield size={12} /> Synthetic financial intelligence · ARGUS CSI
+            </span>
+            <span>
+              <CircleHelp size={12} /> Detector scores describe observed
+              patterns; synthetic truth is separate.
+            </span>
+          </footer>
+        </main>
+      </div>
       <IntelligenceLab
         open={labOpen}
-        incidents={incidentHistory}
+        incidents={incidents}
         onClose={() => setLabOpen(false)}
-        onAnalyze={runCustomAnalysis}
+        onAnalyze={async (request) => {
+          const response = await analyzeData(request);
+          refresh();
+          return response;
+        }}
       />
     </div>
   );
 }
-
-export default App;

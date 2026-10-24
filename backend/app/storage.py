@@ -67,6 +67,12 @@ class ArgusStore:
                 CREATE INDEX IF NOT EXISTS ix_transactions_timestamp_id
                     ON transaction_events(timestamp DESC, transaction_id DESC);
 
+                CREATE TABLE IF NOT EXISTS stream_events (
+                    event_id TEXT PRIMARY KEY, session_id TEXT NOT NULL,
+                    payload TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS ix_stream_session ON stream_events(session_id);
+
                 CREATE TABLE IF NOT EXISTS detector_signals (
                     signal_id TEXT PRIMARY KEY,
                     signal_type TEXT NOT NULL,
@@ -393,17 +399,31 @@ class ArgusStore:
             ).fetchone()
         return Transaction.model_validate_json(row["payload"]) if row else None
 
-    def list_transactions(self, limit: int = 50, offset: int = 0) -> list[Transaction]:
+    def list_transactions(self, limit: int = 50, offset: int = 0, session_id: str | None = None) -> list[Transaction]:
         with self._lock, self._connect() as connection:
             rows = connection.execute(
-                """
-                SELECT payload FROM transaction_events
-                ORDER BY timestamp DESC, transaction_id DESC
-                LIMIT ? OFFSET ?
-                """,
-                (limit, offset),
+                "SELECT payload FROM transaction_events "
+                + ("WHERE batch_id = ? " if session_id else "")
+                + "ORDER BY timestamp DESC, transaction_id DESC LIMIT ? OFFSET ?",
+                ((session_id, limit, offset) if session_id else (limit, offset)),
             ).fetchall()
         return [Transaction.model_validate_json(row["payload"]) for row in rows]
+
+
+    def save_stream_event(self, session_id: str, event: dict) -> None:
+        with self._lock, self._connect() as connection:
+            connection.execute(
+                "INSERT OR IGNORE INTO stream_events(event_id, session_id, payload) VALUES (?, ?, ?)",
+                (event["event_id"], session_id, json.dumps(event)),
+            )
+
+    def list_stream_events(self, session_id: str, limit: int = 2000) -> list[dict]:
+        with self._lock, self._connect() as connection:
+            rows = connection.execute(
+                "SELECT payload FROM stream_events WHERE session_id = ? ORDER BY rowid DESC LIMIT ?",
+                (session_id, limit),
+            ).fetchall()
+        return [json.loads(row["payload"]) for row in reversed(rows)]
 
 
 argus_store = ArgusStore()

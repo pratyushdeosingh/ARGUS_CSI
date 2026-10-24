@@ -206,6 +206,12 @@ async def ingest_transaction(
 
     response.status_code = status.HTTP_201_CREATED
 
+    async def emit(event: dict) -> None:
+        # Session metadata is transport provenance, never a payment lifecycle field.
+        event["session_id"] = effective_batch
+        await asyncio.to_thread(store.save_stream_event, effective_batch, event)
+        await ws_manager.broadcast(event)
+
     # 1. Broadcast transaction.received
     received_event = create_stream_event(
         event_type="transaction.received",
@@ -213,7 +219,7 @@ async def ingest_transaction(
         data=transaction.model_dump(mode="json"),
     )
     try:
-        await ws_manager.broadcast(received_event)
+        await emit(received_event)
     except Exception as err:
         logger.warning(f"Failed to broadcast transaction.received: {err}")
 
@@ -244,7 +250,7 @@ async def ingest_transaction(
             },
         )
         try:
-            await ws_manager.broadcast(scored_event)
+            await emit(scored_event)
         except Exception as err:
             logger.warning(f"Failed to broadcast transaction.scored: {err}")
 
@@ -270,7 +276,7 @@ async def ingest_transaction(
                 },
             )
             try:
-                await ws_manager.broadcast(alert_event)
+                await emit(alert_event)
             except Exception as err:
                 logger.warning(f"Failed to broadcast alert.created: {err}")
 
@@ -287,7 +293,7 @@ async def ingest_transaction(
             },
         )
         try:
-            await ws_manager.broadcast(fail_event)
+            await emit(fail_event)
         except Exception as err:
             logger.warning(f"Failed to broadcast transaction.analysis_failed: {err}")
 
@@ -325,7 +331,7 @@ async def ingest_transaction(
             },
         )
         try:
-            await ws_manager.broadcast(scam_scored_event)
+            await emit(scam_scored_event)
         except Exception as err:
             logger.warning(f"Failed to broadcast transaction.scam_scored: {err}")
 
@@ -356,7 +362,7 @@ async def ingest_transaction(
                 },
             )
             try:
-                await ws_manager.broadcast(scam_alert_event)
+                await emit(scam_alert_event)
             except Exception as err:
                 logger.warning(f"Failed to broadcast scam_alert.created: {err}")
 
@@ -373,7 +379,7 @@ async def ingest_transaction(
             },
         )
         try:
-            await ws_manager.broadcast(fail_event)
+            await emit(fail_event)
         except Exception as err:
             logger.warning(f"Failed to broadcast transaction.scam_scoring_failed: {err}")
 
@@ -397,9 +403,20 @@ async def ingest_transaction(
 def list_transactions(
     limit: int = Query(default=50, ge=1, le=200, description="Maximum number of transactions to return"),
     offset: int = Query(default=0, ge=0, description="Pagination offset"),
+    session_id: str | None = Query(default=None, max_length=160),
     store: ArgusStore = Depends(get_argus_store),
 ) -> list[Transaction]:
-    return store.list_transactions(limit=limit, offset=offset)
+    return store.list_transactions(limit=limit, offset=offset, session_id=session_id)
+
+
+@app.get("/api/transaction-events")
+def list_transaction_events(
+    session_id: str = Query(min_length=1, max_length=160),
+    limit: int = Query(default=2000, ge=1, le=5000),
+    store: ArgusStore = Depends(get_argus_store),
+) -> list[dict]:
+    """Bounded session replay for detector results missed during a disconnect."""
+    return store.list_stream_events(session_id, limit)
 
 
 @app.get(
