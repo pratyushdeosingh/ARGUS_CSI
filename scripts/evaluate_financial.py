@@ -64,7 +64,7 @@ def evaluate(output, cases_per_segment=8):
         "split_policy": "Distinct customer namespaces, fixed independent seeds, validation date before test; thresholds frozen before test scoring metrics",
         "seeds": {"validation": 104729, "test": 982451653},
         "development_note": "Earlier synthetic seed 130363 exposed payroll false positives and was used for policy development; final test seed was changed after that correction.",
-        "source_fingerprints": {name: sha256((ROOT / name).read_bytes()).hexdigest() for name in [
+        "source_fingerprints": {name: sha256((ROOT / name).read_text(encoding="utf-8").replace("\r\n", "\n").encode()).hexdigest() for name in [
             "services/graph-detector/financial.py", "services/graph-detector/tgnn.py",
             "services/graph-detector/detector.py", "services/graph-detector/features.py",
             "services/graph-detector/graph_builder.py", "services/graph-detector/mule_detector.py",

@@ -21,7 +21,7 @@ from scam_detector import ScamDetector
 
 
 _SERVICE_DIR = Path(__file__).resolve().parent
-_POLICY_DIGEST = sha256(b"".join((_SERVICE_DIR / name).read_bytes() for name in [
+_POLICY_DIGEST = sha256(b"".join((_SERVICE_DIR / name).read_text(encoding="utf-8").replace("\r\n", "\n").encode() for name in [
     "financial.py", "features.py", "mule_detector.py", "scam_detector.py",
     "tgnn.py", "graph_builder.py", "history.py", "detector.py",
 ])).hexdigest()
