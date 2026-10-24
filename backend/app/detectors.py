@@ -55,9 +55,39 @@ class DetectorGateway:
         system, system_status = self._resolve_system(system_result)
         return graph, system, DetectorStatus(graph=graph_status, system=system_status)
 
+    async def analyze_graph(
+        self,
+        transactions: list[Transaction],
+        *,
+        baseline_transactions: list[Transaction] | None = None,
+    ) -> GraphSignal:
+        """Analyze a batch of transactions using the graph detector."""
+
+        if self.settings.detector_mode == "fixture":
+            raise DetectorUnavailable(
+                "Graph analysis is unavailable in fixture mode. Start the detector services."
+            )
+
+        timeout = httpx.Timeout(self.settings.detector_timeout_seconds)
+        async with httpx.AsyncClient(timeout=timeout, transport=self.transport) as client:
+            try:
+                graph = await self._fetch_graph(
+                    client,
+                    transactions,
+                    baseline_transactions=baseline_transactions,
+                )
+            except Exception as error:
+                raise DetectorUnavailable(
+                    f"Graph detector could not analyze this batch: {self._error_detail(error)}"
+                ) from error
+
+            self.state.last_graph_signal = graph
+            return graph
+
     async def analyze_payload(
         self,
         transactions: list[Transaction],
+
         *,
         baseline_transactions: list[Transaction] | None = None,
         telemetry_events: list[RawTelemetryEvent] | None = None,
