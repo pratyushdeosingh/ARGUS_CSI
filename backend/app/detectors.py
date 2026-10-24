@@ -7,12 +7,16 @@ import httpx
 
 from .config import Settings
 from .models import (
+    Decision,
+    DetectorBreakdown,
     DetectorComponentStatus,
     DetectorStatus,
     GraphSignal,
     RawTelemetryEvent,
+    RiskBand,
     SystemSignal,
     Transaction,
+    TransactionScoreResponse,
 )
 from .simulator import load_mock_signals
 from .state import DemoState, demo_state
@@ -83,6 +87,34 @@ class DetectorGateway:
 
             self.state.last_graph_signal = graph
             return graph
+
+    async def score_transaction(
+        self, transaction: Transaction, history_transactions: list[Transaction] | None = None
+    ) -> TransactionScoreResponse:
+        """Use a request-scoped context for ingested payments; never invent a score."""
+        if self.settings.detector_mode == "fixture":
+            raise DetectorUnavailable("Specialist scoring requires the graph service; fixture mode cannot score caller payments.")
+        endpoint = "/score-transaction-context" if history_transactions is not None else "/score-transaction"
+        payload = transaction.model_dump(mode="json")
+        if history_transactions is not None:
+            payload = {"transaction": payload,
+                       "history": [tx.model_dump(mode="json") for tx in history_transactions]}
+        timeout = httpx.Timeout(self.settings.detector_timeout_seconds)
+        async with httpx.AsyncClient(timeout=timeout, transport=self.transport) as client:
+            try:
+                response = await client.post(f"{self.settings.graph_detector_url}{endpoint}", json=payload)
+                response.raise_for_status()
+                result = TransactionScoreResponse.model_validate(response.json())
+                expected = (transaction.transaction_id, transaction.source_account,
+                            transaction.destination_account, transaction.amount, transaction.currency, transaction.timestamp)
+                actual = (result.transaction_id, result.sender, result.receiver, result.amount, result.currency, result.timestamp)
+                if actual != expected:
+                    raise ValueError("Specialist response does not match the submitted payment")
+                return result
+            except Exception as error:
+                raise DetectorUnavailable(
+                    f"Scam detector could not score this transaction: {self._error_detail(error)}"
+                ) from error
 
     async def analyze_payload(
         self,

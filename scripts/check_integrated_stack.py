@@ -95,6 +95,15 @@ async def main(args):
             event = json.loads(await asyncio.wait_for(socket.recv(), timeout=30))
             assert event["event_type"] == event_type, event
             assert event["data"]["transaction_id"] == tx["transaction_id"]
+        # Specialist output must be real, validated and explicitly normalized.
+        specialist_event = json.loads(await asyncio.wait_for(socket.recv(), timeout=30))
+        if specialist_event["event_type"] == "alert.created":
+            specialist_event = json.loads(await asyncio.wait_for(socket.recv(), timeout=30))
+        assert specialist_event["event_type"] == "transaction.scam_scored", specialist_event
+        data = specialist_event["data"]
+        assert data["transaction_id"] == tx["transaction_id"]
+        assert 0 <= data["scam_score"] <= 100
+        assert data["normalized_scam_score"] == round(data["scam_score"] / 100, 3)
     duplicate = request(f"http://127.0.0.1:8000/api/transactions?session_id={session}", tx)
     assert duplicate["status"] == "already_received"
     expect_status("http://127.0.0.1:8000/api/transactions", dict(tx, amount=tx["amount"] + 1), 409)

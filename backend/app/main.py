@@ -291,6 +291,92 @@ async def ingest_transaction(
         except Exception as err:
             logger.warning(f"Failed to broadcast transaction.analysis_failed: {err}")
 
+    # 5. Specialist scam and risk scoring
+    try:
+        scam_context = await asyncio.to_thread(
+            store.get_recent_transactions_window,
+            end_timestamp=transaction.timestamp,
+            window_minutes=settings.analysis_window_minutes,
+            max_count=settings.analysis_max_transactions,
+            batch_id=effective_batch,
+        )
+        score_resp = await gateway.score_transaction(transaction, history_transactions=scam_context)
+        raw_scam_score = score_resp.detectors.scam
+        normalized_scam_score = round(raw_scam_score / 100.0, 3)
+        raw_risk_score = score_resp.risk_score
+        normalized_risk_score = round(raw_risk_score / 100.0, 3)
+
+        scam_scored_event = create_stream_event(
+            event_type="transaction.scam_scored",
+            timestamp=transaction.timestamp,
+            data={
+                "transaction_id": transaction.transaction_id,
+                "scam_score": raw_scam_score,
+                "normalized_scam_score": normalized_scam_score,
+                "risk_score": raw_risk_score,
+                "normalized_risk_score": normalized_risk_score,
+                "risk_band": score_resp.risk_band.value,
+                "decision": score_resp.decision.value,
+                "detector_breakdown": score_resp.detectors.model_dump(),
+                "top_factors": score_resp.top_factors,
+                "reasons": score_resp.reasons,
+                "explanation": score_resp.explanation,
+                "scale": "scam_score: 0-100, normalized_scam_score: 0.0-1.0",
+            },
+        )
+        try:
+            await ws_manager.broadcast(scam_scored_event)
+        except Exception as err:
+            logger.warning(f"Failed to broadcast transaction.scam_scored: {err}")
+
+        # 6. Check if specialist scam alert threshold is exceeded
+        if raw_scam_score >= settings.scam_alert_threshold:
+            scam_alert_event = create_stream_event(
+                event_type="scam_alert.created",
+                timestamp=transaction.timestamp,
+                data={
+                    "alert_id": f"ALT-SCAM-{transaction.transaction_id}",
+                    "transaction_id": transaction.transaction_id,
+                    "source_account": transaction.source_account,
+                    "destination_account": transaction.destination_account,
+                    "scam_score": raw_scam_score,
+                    "normalized_scam_score": normalized_scam_score,
+                    "risk_score": raw_risk_score,
+                    "normalized_risk_score": normalized_risk_score,
+                    "risk_band": score_resp.risk_band.value,
+                    "decision": score_resp.decision.value,
+                    "severity": "critical" if raw_scam_score >= 85.0 else "high",
+                    "top_factors": score_resp.top_factors,
+                    "supporting_evidence": score_resp.reasons,
+                    "message": (
+                        f"Specialist scam score {raw_scam_score:.1f}/100 "
+                        f"(normalized: {normalized_scam_score:.3f}) exceeded threshold "
+                        f"{settings.scam_alert_threshold:.1f}/100."
+                    ),
+                },
+            )
+            try:
+                await ws_manager.broadcast(scam_alert_event)
+            except Exception as err:
+                logger.warning(f"Failed to broadcast scam_alert.created: {err}")
+
+    except Exception as error:
+        logger.warning(
+            f"Specialist scam scoring failed for transaction {transaction.transaction_id}: {error}"
+        )
+        fail_event = create_stream_event(
+            event_type="transaction.scam_scoring_failed",
+            timestamp=transaction.timestamp,
+            data={
+                "transaction_id": transaction.transaction_id,
+                "error": f"Specialist scam scoring unavailable: {str(error)}",
+            },
+        )
+        try:
+            await ws_manager.broadcast(fail_event)
+        except Exception as err:
+            logger.warning(f"Failed to broadcast transaction.scam_scoring_failed: {err}")
+
     return TransactionIngestionResponse(
         status=result,
         message="Transaction ingested successfully",
