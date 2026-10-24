@@ -54,12 +54,20 @@ def mock_graph_detector():
 @pytest.fixture
 def mock_gateway(mock_graph_detector: GraphDetector):
     """Provides a DetectorGateway backed by an in-process MockTransport."""
+    from engine import TransactionRiskEngine
+    risk_engine = TransactionRiskEngine(mock_graph_detector)
+
     def handler(request: httpx.Request) -> httpx.Response:
         if request.url.path == "/analyze":
             body = json.loads(request.content)
             txs = [GraphTx.model_validate(x) for x in body]
             signal = mock_graph_detector.analyze(txs)
             return httpx.Response(200, json=signal.model_dump(mode="json"))
+        if request.url.path == "/score-transaction":
+            body = json.loads(request.content)
+            tx = GraphTx.model_validate(body)
+            engine_resp = risk_engine.score_transaction(tx)
+            return httpx.Response(200, json=engine_resp.model_dump(mode="json"))
         return httpx.Response(404, json={"detail": "Not found"})
 
     settings = Settings(
@@ -159,6 +167,13 @@ def test_transaction_ingest_broadcasts_events(client: TestClient) -> None:
         assert "signal_id" in evt2["data"]
         assert "anomaly_type" in evt2["data"]
 
+        # 5. Expect transaction.scam_scored
+        evt3 = ws.receive_json()
+        assert evt3["event_type"] == "transaction.scam_scored"
+        assert evt3["data"]["transaction_id"] == "TX-STREAM-1"
+        assert "scam_score" in evt3["data"]
+        assert "normalized_scam_score" in evt3["data"]
+
 
 def test_multiple_simultaneous_ws_clients(client: TestClient, isolated_manager: WebSocketManager) -> None:
     """Multiple simultaneously connected clients all receive broadcast events."""
@@ -189,6 +204,12 @@ def test_multiple_simultaneous_ws_clients(client: TestClient, isolated_manager: 
         assert s1["event_type"] == "transaction.scored"
         assert s2["event_type"] == "transaction.scored"
 
+        # Both ws1 and ws2 receive transaction.scam_scored
+        sc1 = ws1.receive_json()
+        sc2 = ws2.receive_json()
+        assert sc1["event_type"] == "transaction.scam_scored"
+        assert sc2["event_type"] == "transaction.scam_scored"
+
 
 def test_ws_client_disconnection_handled_gracefully(client: TestClient, isolated_manager: WebSocketManager) -> None:
     """When one client disconnects, broadcasting to remaining clients continues without failure."""
@@ -208,6 +229,8 @@ def test_ws_client_disconnection_handled_gracefully(client: TestClient, isolated
         assert evt1["event_type"] == "transaction.received"
         evt2 = ws1.receive_json()
         assert evt2["event_type"] == "transaction.scored"
+        evt3 = ws1.receive_json()
+        assert evt3["event_type"] == "transaction.scam_scored"
 
 
 def test_no_broadcast_on_duplicate_identical_transaction(client: TestClient) -> None:
@@ -222,6 +245,7 @@ def test_no_broadcast_on_duplicate_identical_transaction(client: TestClient) -> 
         assert res1.status_code == 201
         assert ws.receive_json()["event_type"] == "transaction.received"
         assert ws.receive_json()["event_type"] == "transaction.scored"
+        assert ws.receive_json()["event_type"] == "transaction.scam_scored"
 
         # 2. Second submission (200 OK, already_received)
         res2 = client.post("/api/transactions", json=payload)
@@ -234,6 +258,8 @@ def test_no_broadcast_on_duplicate_identical_transaction(client: TestClient) -> 
         next_evt = ws.receive_json()
         assert next_evt["event_type"] == "transaction.received"
         assert next_evt["data"]["transaction_id"] == "TX-NEW-2"
+        assert ws.receive_json()["event_type"] == "transaction.scored"
+        assert ws.receive_json()["event_type"] == "transaction.scam_scored"
 
 
 def test_no_broadcast_on_conflict_or_validation_failure(client: TestClient) -> None:
@@ -250,6 +276,7 @@ def test_no_broadcast_on_conflict_or_validation_failure(client: TestClient) -> N
         assert res.status_code == 201
         assert ws.receive_json()["event_type"] == "transaction.received"
         assert ws.receive_json()["event_type"] == "transaction.scored"
+        assert ws.receive_json()["event_type"] == "transaction.scam_scored"
 
         # Ingest conflict -> 409
         conf_res = client.post("/api/transactions", json=conflict_payload)
@@ -264,6 +291,8 @@ def test_no_broadcast_on_conflict_or_validation_failure(client: TestClient) -> N
         nxt = ws.receive_json()
         assert nxt["event_type"] == "transaction.received"
         assert nxt["data"]["transaction_id"] == "TX-AFTER-CONF"
+        assert ws.receive_json()["event_type"] == "transaction.scored"
+        assert ws.receive_json()["event_type"] == "transaction.scam_scored"
 
 
 def test_rolling_window_chronological_retrieval(isolated_store: ArgusStore) -> None:
@@ -377,6 +406,10 @@ def test_normal_dataset_low_risk_streaming(client: TestClient) -> None:
             assert scored["event_type"] == "transaction.scored"
             assert scored["data"]["risk_score"] < 0.70
 
+            scam = ws.receive_json()
+            assert scam["event_type"] == "transaction.scam_scored"
+            assert scam["data"]["scam_score"] < 70.0
+
 
 def test_mule_dataset_triggers_fraud_alert(client: TestClient) -> None:
     """Streaming mule scenario transactions eventually triggers high-risk alert.created."""
@@ -407,6 +440,16 @@ def test_mule_dataset_triggers_fraud_alert(client: TestClient) -> None:
                 assert alert["data"]["risk_score"] >= 0.70
                 assert len(alert["data"]["suspicious_accounts"]) >= 4
                 alert_received = True
+
+            scam = ws.receive_json()
+            assert scam["event_type"] == "transaction.scam_scored"
+
+            if scam["data"]["scam_score"] >= 70.0:
+                scam_alert = ws.receive_json()
+                assert scam_alert["event_type"] == "scam_alert.created"
+                assert scam_alert["data"]["alert_id"].startswith("ALT-SCAM-")
+
+            if alert_received:
                 break
 
         assert alert_received, "Expected mule chain to trigger alert.created event"
@@ -443,6 +486,11 @@ def test_graph_detector_failure_handled_gracefully(isolated_store: ArgusStore, i
         assert failed_evt["event_type"] == "transaction.analysis_failed"
         assert failed_evt["data"]["transaction_id"] == "TX-FAIL-DETECTOR"
         assert "unavailable" in failed_evt["data"]["error"]
+
+        # Scam scoring failed event
+        scam_failed = ws.receive_json()
+        assert scam_failed["event_type"] == "transaction.scam_scoring_failed"
+        assert scam_failed["data"]["transaction_id"] == "TX-FAIL-DETECTOR"
 
     # Verify transaction was persisted in SQLite nonetheless
     stored = isolated_store.get_transaction("TX-FAIL-DETECTOR")

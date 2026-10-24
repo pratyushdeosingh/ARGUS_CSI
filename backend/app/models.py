@@ -183,3 +183,40 @@ class PlatformMetrics(StrictModel):
     total_value_observed: float
     average_confidence: float
     severity_counts: dict[str, int]
+
+
+class RiskBand(str, Enum):
+    LOW = "LOW"
+    MODERATE = "MODERATE"
+    HIGH = "HIGH"
+    SEVERE = "SEVERE"
+
+
+class Decision(str, Enum):
+    ALLOW = "ALLOW"
+    REVIEW = "REVIEW"
+    BLOCK = "BLOCK"
+
+
+class DetectorBreakdown(StrictModel):
+    rules: float
+    tgnn: float
+    mule: float
+    scam: float
+
+
+class TransactionScoreResponse(StrictModel):
+    transaction_id: str
+    sender: str
+    receiver: str
+    amount: float
+    currency: str
+    timestamp: datetime
+    risk_score: float
+    risk_band: RiskBand
+    decision: Decision
+    detectors: DetectorBreakdown
+    top_factors: list[str] = Field(default_factory=list)
+    reasons: list[str] = Field(default_factory=list)
+    explanation: str
+

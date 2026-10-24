@@ -7,12 +7,16 @@ import httpx
 
 from .config import Settings
 from .models import (
+    Decision,
+    DetectorBreakdown,
     DetectorComponentStatus,
     DetectorStatus,
     GraphSignal,
     RawTelemetryEvent,
+    RiskBand,
     SystemSignal,
     Transaction,
+    TransactionScoreResponse,
 )
 from .simulator import load_mock_signals
 from .state import DemoState, demo_state
@@ -83,6 +87,41 @@ class DetectorGateway:
 
             self.state.last_graph_signal = graph
             return graph
+
+    async def score_transaction(
+        self, transaction: Transaction
+    ) -> TransactionScoreResponse:
+        """Score a single transaction against specialist models via /score-transaction."""
+        if self.settings.detector_mode == "fixture":
+            return TransactionScoreResponse(
+                transaction_id=transaction.transaction_id,
+                sender=transaction.source_account,
+                receiver=transaction.destination_account,
+                amount=transaction.amount,
+                currency=transaction.currency,
+                timestamp=transaction.timestamp,
+                risk_score=0.0,
+                risk_band=RiskBand.LOW,
+                decision=Decision.ALLOW,
+                detectors=DetectorBreakdown(rules=0.0, tgnn=0.0, mule=0.0, scam=0.0),
+                top_factors=["Scam Detector (0/100)"],
+                reasons=["Fixture-only mode is configured."],
+                explanation="Fixture evaluation for transaction.",
+            )
+
+        timeout = httpx.Timeout(self.settings.detector_timeout_seconds)
+        async with httpx.AsyncClient(timeout=timeout, transport=self.transport) as client:
+            try:
+                response = await client.post(
+                    f"{self.settings.graph_detector_url}/score-transaction",
+                    json=transaction.model_dump(mode="json"),
+                )
+                response.raise_for_status()
+                return TransactionScoreResponse.model_validate(response.json())
+            except Exception as error:
+                raise DetectorUnavailable(
+                    f"Scam detector could not score this transaction: {self._error_detail(error)}"
+                ) from error
 
     async def analyze_payload(
         self,
