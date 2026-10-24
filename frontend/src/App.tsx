@@ -256,7 +256,7 @@ function TransactionGraph({
 function ScoreBar({ score, tone }: { score: number; tone: "mint" | "danger" }) {
   return (
     <div className="score-wrap">
-      <div className="score-track" aria-label={`Risk score ${Math.round(score * 100)} percent`}>
+      <div className="score-track" aria-label={`Risk score ${Math.round(score * 100)} out of 100`}>
         <span className={`score-fill ${tone}`} style={{ width: `${score * 100}%` }} />
       </div>
       <strong>{Math.round(score * 100)}</strong>
@@ -328,7 +328,7 @@ function IncidentPanel({ incident, phase }: { incident: Incident | null; phase: 
         </div>
         <span className="eyebrow">ARGUS CORRELATION ENGINE</span>
         <h2>No active incident</h2>
-        <p>Financial and infrastructure signals are continuously evaluated for shared evidence.</p>
+        <p>Run an analysis to inspect financial and optional infrastructure evidence.</p>
         <div className="correlation-idle">
           <CircleDot size={14} /> Waiting for correlated signals
         </div>
@@ -625,7 +625,7 @@ function App() {
           <aside className="left-column">
             <section className="panel timeline-panel">
               <div className="panel-heading">
-                <div><span className="eyebrow">LIVE SEQUENCE</span><h2>Attack timeline</h2></div>
+                <div><span className="eyebrow">ANALYSIS SEQUENCE</span><h2>Analysis timeline</h2></div>
                 <Activity size={18} />
               </div>
               <div className="timeline">

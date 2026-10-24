@@ -18,6 +18,7 @@ with owners and acceptance criteria. A passing test suite does not close them.
 | --- | --- |
 | Local backend rerun | 28 targeted tests passed after isolating API test databases |
 | Local frontend rerun | 4 tests passed; TypeScript and production build passed |
+| Browser smoke | Production React build against an isolated fixture backend: graph rendering, staged demo, three simulated approval actions, audit display, Data Lab fields/history and visible fixture-mode error |
 | Complete Python suite | Required in the audit PR's Linux CI, including graph/TGNN and simulator tests |
 | Containers | CI builds the four services and waits for health checks |
 | Batch boundary | Real HTTP batch calls, request baseline, service provenance, graph-only null incident and cross-domain case |
@@ -57,9 +58,11 @@ backend/frontend results above are separate from those CI results.
 - Compliance case workflow/reporting or jurisdictional compliance: missing.
 - Representative fraud/scam accuracy, model calibration or ML attribution:
   no independent evaluation or appropriate attribution study is included.
-- Full rendered browser interactions, graph layout/accessibility and responsive
-  UI: no new browser-level verification in this audit. Existing frontend tests
-  cover API/helper behaviour; builds do not verify every interaction.
+- Full rendered browser interactions, accessibility and responsive layout:
+  only the desktop fixture workflow above was manually inspected. Arbitrary
+  analysis with real detectors is checked at HTTP boundaries in CI, rather than
+  as a complete browser workflow. No mobile, keyboard or visual-regression suite
+  was run. Frontend automated tests cover API/helper behaviour.
 - Live privileged Linux eBPF: opt-in and skipped in standard CI; replay is tested.
 - Production throughput, concurrent approval atomicity, complete specialist
   scoring concurrency, durable alert recovery, immutable transaction revisions,
