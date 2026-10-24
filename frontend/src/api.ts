@@ -1,5 +1,6 @@
 import type {
   ApprovalResponse,
+  AuditEvent,
   AnalysisRequest,
   AnalysisResponse,
   AttackResponse,
@@ -61,4 +62,8 @@ export function loadPlatformMetrics(): Promise<PlatformMetrics> {
 
 export function loadIncidents(limit = 20): Promise<Incident[]> {
   return request<Incident[]>(`/api/incidents?limit=${limit}`);
+}
+
+export function loadAuditEvents(incidentId: string): Promise<AuditEvent[]> {
+  return request<AuditEvent[]>(`/api/audit?incident_id=${encodeURIComponent(incidentId)}`);
 }

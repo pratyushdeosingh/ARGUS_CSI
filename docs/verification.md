@@ -46,6 +46,8 @@ backend/frontend results above are separate from those CI results.
   Previously stored signal/case IDs are retained; new analyses use the new IDs.
 - Reanalysis cannot overwrite a stored contained case with a pending case.
   API responses return the persisted state; approval reads the stored case.
+- Reopening a contained case in the React demo restores the contained display
+  and loads its stored action audit instead of showing pending actions.
 - Backend API tests use isolated temporary databases and reset in-memory state,
   rather than depending on previously saved demo cases.
 - Compose maps the documented fraud threshold/window settings to the backend.

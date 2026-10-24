@@ -31,6 +31,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   analyzeData,
   approveIncident,
+  loadAuditEvents,
   loadDetectorStatus,
   loadIncidents,
   loadNormalState,
@@ -451,6 +452,9 @@ function App() {
     setAuditEvents([]);
     try {
       const response = await simulateAttack();
+      if (response.incident.status === "contained") {
+        setAuditEvents(await loadAuditEvents(response.incident.incident_id));
+      }
       setAttack(response);
       setDetectorStatus(response.detector_status);
       setIncident(response.incident);
@@ -458,7 +462,9 @@ function App() {
       setPhase(1);
       [2, 3, 4, 5].forEach((nextPhase, index) => {
         timersRef.current.push(
-          window.setTimeout(() => setPhase(nextPhase as DemoPhase), 850 * (index + 1)),
+          window.setTimeout(() => setPhase(
+            nextPhase === 5 && response.incident.status === "contained" ? 6 : nextPhase as DemoPhase,
+          ), 850 * (index + 1)),
         );
       });
     } catch (reason) {
@@ -483,7 +489,10 @@ function App() {
         incident: response.incident,
       });
       setIncident(response.incident);
-      setPhase(5);
+      if (response.incident.status === "contained") {
+        setAuditEvents(await loadAuditEvents(response.incident.incident_id));
+      }
+      setPhase(response.incident.status === "contained" ? 6 : 5);
     }
     await refreshPlatform();
     return response;
