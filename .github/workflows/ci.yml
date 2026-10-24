@@ -26,6 +26,9 @@ jobs:
             services/graph-detector/requirements.txt
             services/ebpf-detector/requirements.txt
 
+      - name: Install CPU-only PyTorch
+        run: python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
@@ -41,8 +44,10 @@ jobs:
         with:
           node-version: "22"
 
-      - name: Enable pnpm
-        run: corepack enable
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.22.0
 
       - name: Install frontend dependencies
         run: pnpm --dir frontend install --frozen-lockfile
@@ -55,3 +60,19 @@ jobs:
 
       - name: Build the integrated container stack
         run: docker compose build
+
+      - name: Start the integrated container stack
+        run: docker compose up -d --wait --wait-timeout 120
+
+      - name: Verify real service integration
+        run: |
+          python -m backend.app.integration_check
+          python scripts/check_integrated_stack.py
+
+      - name: Show container logs on failure
+        if: failure()
+        run: docker compose logs --tail=150
+
+      - name: Stop containers
+        if: always()
+        run: docker compose down

@@ -1,0 +1,90 @@
+================================================================================
+ARGUS CSI - Temporal GNN Implementation Summary
+================================================================================
+
+This document summarizes the additions, modifications, architecture details, and
+verification results of implementing the Temporal Graph Neural Network (TGNN)
+for the `graph-detector` service in the ARGUS_CSI repository.
+
+--------------------------------------------------------------------------------
+1. ADDED FILES
+--------------------------------------------------------------------------------
+* services/graph-detector/tgnn.py
+  - Contains the PyTorch `TGNN` module class.
+  - Implements the feature builder, projection, message passing (neighbor aggregation),
+    chronological GRUCell-based temporal state updates, and Sigmoid anomaly score output.
+  - Contains a `train_tgnn` utility that performs dynamic optimization on startup
+    to train the model to distinguish normal batches (target: 0.0) from attack batches (target: 1.0).
+
+* services/graph-detector/tests/test_tgnn.py
+  - A pytest module verifying TGNN behavior:
+    1. Instantiation and layer dimensions.
+    2. Forward pass correctness and boundary compliance.
+    3. Influence of graph neighborhood structure on risk output.
+    4. Influence of temporal ordering/timestamps on risk output.
+
+* services/graph-detector/tgnn_weights.pt
+  - Generated dynamically after model training runs successfully on startup,
+    allowing instant subsequent loading without retraining.
+
+--------------------------------------------------------------------------------
+2. MODIFIED FILES
+--------------------------------------------------------------------------------
+* services/graph-detector/detector.py
+  - Instantiates `TGNN` on startup inside `GraphDetector.__init__`.
+  - Integrates the model into the `analyze()` loop, taking the maximum of the
+    rule-based score and the GNN score to preserve existing functionality.
+  - Appends explanatory explanations to the reasons list if GNN risk is high.
+  - Inserts the highest-risk account into `suspicious_accounts` to preserve the
+    strict schema contracts for orchestration.
+
+* services/graph-detector/requirements.txt
+  - Added `torch` and `numpy` dependencies required for GNN modeling and math helpers.
+
+* services/graph-detector/Dockerfile
+  - Optimized to pre-install PyTorch via the official CPU index. This prevents
+    downloading massive CUDA GPU wheels (reducing package download from ~430MB
+    to ~150MB, and preventing Docker image bloating).
+
+* services/graph-detector/README.md
+  - Added a detailed technical section documenting node features, edge attributes,
+    message passing, temporal state tracking, and pipeline placement.
+
+--------------------------------------------------------------------------------
+3. HOW THE TGNN ARCHITECTURE WORKS
+--------------------------------------------------------------------------------
+- Node Features: Constructed from the transaction batch volume. Formatted as:
+  [log1p(total_sent), log1p(total_received), count_sent, count_received].
+- Projection: Multiplied by a weight matrix to map features to 8 hidden dimensions.
+- Message Passing: Propagates information by averaging incoming (predecessor)
+  and outgoing (successor) neighbor representations in the transaction graph.
+- Non-linear Combination: Concatenates self-state and neighbor messages, mapping
+  them to the GRU initial hidden state via a linear layer and a ReLU activation.
+- Temporal Recurrence: Sorts transactions chronologically. Processes each event
+  by extracting the transaction amount and the time-delta (dt) since the previous
+  transaction. Feeds these alongside the counterpart's current state to a
+  `nn.GRUCell` to update the node states.
+- Output Representation: Node states are projected to individual sigmoid probabilities
+  [0, 1]. The batch risk is the maximum of the node risk scores.
+
+--------------------------------------------------------------------------------
+4. VERIFICATION AND TESTS
+--------------------------------------------------------------------------------
+The full test suite was validated inside Docker using:
+$ docker run --rm -v "$(pwd)":/workspace -w /workspace -e PYTHONPATH=/workspace/services/graph-detector:/workspace argus-graph-detector pytest services/graph-detector/tests
+
+All 19 tests passed successfully in 1.24s:
+- services/graph-detector/tests/test_api.py (5/5 passed)
+- services/graph-detector/tests/test_contract.py (1/1 passed)
+- services/graph-detector/tests/test_detector.py (5/5 passed)
+- services/graph-detector/tests/test_graph_builder.py (2/2 passed)
+- services/graph-detector/tests/test_integration.py (1/1 passed)
+- services/graph-detector/tests/test_tgnn.py (5/5 passed)
+
+--------------------------------------------------------------------------------
+5. GIT INSTRUCTIONS
+--------------------------------------------------------------------------------
+The changes have been staged in git for you. To commit and push them, run:
+$ git commit -m "feat(graph-detector): implement Temporal Graph Neural Network (TGNN) component and tests"
+$ git push origin pratham/graph-detector
+================================================================================

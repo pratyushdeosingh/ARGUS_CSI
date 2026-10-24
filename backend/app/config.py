@@ -10,6 +10,9 @@ class Settings:
     graph_detector_url: str
     ebpf_detector_url: str
     detector_timeout_seconds: float
+    fraud_alert_threshold: float = 0.70
+    analysis_window_minutes: int = 15
+    analysis_max_transactions: int = 100
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -21,6 +24,15 @@ class Settings:
         timeout = float(os.getenv("DETECTOR_TIMEOUT_SECONDS", "2.5"))
         if timeout <= 0:
             raise ValueError("DETECTOR_TIMEOUT_SECONDS must be greater than zero")
+        threshold = float(os.getenv("FRAUD_ALERT_THRESHOLD", "0.70"))
+        window_minutes = int(os.getenv("ANALYSIS_WINDOW_MINUTES", "15"))
+        max_transactions = int(os.getenv("ANALYSIS_MAX_TRANSACTIONS", "100"))
+        if not 0 <= threshold <= 1:
+            raise ValueError("FRAUD_ALERT_THRESHOLD must be between zero and one")
+        if window_minutes <= 0:
+            raise ValueError("ANALYSIS_WINDOW_MINUTES must be positive")
+        if not 1 <= max_transactions <= 5000:
+            raise ValueError("ANALYSIS_MAX_TRANSACTIONS must be between 1 and 5000")
         return cls(
             detector_mode=mode,
             graph_detector_url=os.getenv(
@@ -30,4 +42,12 @@ class Settings:
                 "EBPF_DETECTOR_URL", "http://127.0.0.1:8002"
             ).rstrip("/"),
             detector_timeout_seconds=timeout,
+            fraud_alert_threshold=threshold,
+            analysis_window_minutes=window_minutes,
+            analysis_max_transactions=max_transactions,
         )
+
+
+def get_settings() -> Settings:
+    """Dependency provider for FastAPI."""
+    return Settings.from_env()
