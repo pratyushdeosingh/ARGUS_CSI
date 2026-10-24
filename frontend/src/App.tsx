@@ -31,6 +31,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   analyzeData,
   approveIncident,
+  loadAuditEvents,
   loadDetectorStatus,
   loadIncidents,
   loadNormalState,
@@ -256,7 +257,7 @@ function TransactionGraph({
 function ScoreBar({ score, tone }: { score: number; tone: "mint" | "danger" }) {
   return (
     <div className="score-wrap">
-      <div className="score-track" aria-label={`Risk score ${Math.round(score * 100)} percent`}>
+      <div className="score-track" aria-label={`Risk score ${Math.round(score * 100)} out of 100`}>
         <span className={`score-fill ${tone}`} style={{ width: `${score * 100}%` }} />
       </div>
       <strong>{Math.round(score * 100)}</strong>
@@ -328,7 +329,7 @@ function IncidentPanel({ incident, phase }: { incident: Incident | null; phase: 
         </div>
         <span className="eyebrow">ARGUS CORRELATION ENGINE</span>
         <h2>No active incident</h2>
-        <p>Financial and infrastructure signals are continuously evaluated for shared evidence.</p>
+        <p>Run an analysis to inspect financial and optional infrastructure evidence.</p>
         <div className="correlation-idle">
           <CircleDot size={14} /> Waiting for correlated signals
         </div>
@@ -451,6 +452,9 @@ function App() {
     setAuditEvents([]);
     try {
       const response = await simulateAttack();
+      if (response.incident.status === "contained") {
+        setAuditEvents(await loadAuditEvents(response.incident.incident_id));
+      }
       setAttack(response);
       setDetectorStatus(response.detector_status);
       setIncident(response.incident);
@@ -458,7 +462,9 @@ function App() {
       setPhase(1);
       [2, 3, 4, 5].forEach((nextPhase, index) => {
         timersRef.current.push(
-          window.setTimeout(() => setPhase(nextPhase as DemoPhase), 850 * (index + 1)),
+          window.setTimeout(() => setPhase(
+            nextPhase === 5 && response.incident.status === "contained" ? 6 : nextPhase as DemoPhase,
+          ), 850 * (index + 1)),
         );
       });
     } catch (reason) {
@@ -483,7 +489,10 @@ function App() {
         incident: response.incident,
       });
       setIncident(response.incident);
-      setPhase(5);
+      if (response.incident.status === "contained") {
+        setAuditEvents(await loadAuditEvents(response.incident.incident_id));
+      }
+      setPhase(response.incident.status === "contained" ? 6 : 5);
     }
     await refreshPlatform();
     return response;
@@ -573,7 +582,7 @@ function App() {
           <span className={classNames("system-status", detectorStatus && !detectorsHealthy && "degraded")}>
             <i /> {detectorsHealthy ? "SYSTEM OPERATIONAL" : detectorStatus ? "DETECTORS DEGRADED" : "CHECKING SERVICES"}
           </span>
-          <span className="environment">LIVE INTELLIGENCE · SAFE LAB</span>
+          <span className="environment">FINANCIAL INTELLIGENCE · SYNTHETIC LAB</span>
         </div>
         <div className="topbar-actions">
           <span className="utc-clock"><Clock3 size={14} /> {utcTime.toISOString().slice(11, 19)} UTC</span>
@@ -625,7 +634,7 @@ function App() {
           <aside className="left-column">
             <section className="panel timeline-panel">
               <div className="panel-heading">
-                <div><span className="eyebrow">LIVE SEQUENCE</span><h2>Attack timeline</h2></div>
+                <div><span className="eyebrow">ANALYSIS SEQUENCE</span><h2>Analysis timeline</h2></div>
                 <Activity size={18} />
               </div>
               <div className="timeline">

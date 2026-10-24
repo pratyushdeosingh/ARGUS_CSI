@@ -1,3 +1,7 @@
+> Historical contributor handoff. It predates integration repairs and is not
+> the current capability or verification report. Use [README](../README.md),
+> [integration](integration.md) and [TODO](../TODO.md) for current behaviour.
+
 # ARGUS_CSI Project Handoff for ChatGPT
 
 ## Paste-ready context

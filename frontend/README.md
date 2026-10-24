@@ -1,49 +1,42 @@
-# ARGUS dashboard — Pratyush
+# ARGUS React dashboard
 
-This React/Vite interface is the analyst-facing layer of ARGUS. It visualizes
-the healthy baseline, staged attack timeline, transaction graph, detector
-provenance, correlated incident, approval gate, and containment audit trail.
+React, TypeScript, Vite and Cytoscape interface for batch financial analysis and
+the existing cross-domain investigation demo. It calls the core backend on port
+8000, rather than calling detector services directly.
 
-Required views on one main screen:
+## Implemented
 
-- system health and threat level;
-- live attack timeline;
-- transaction/mule graph;
-- graph-detector evidence;
-- eBPF evidence;
-- correlated incident explanation;
-- response recommendations and approval control; and
-- containment audit log.
+- Editable Data Lab transaction, baseline and telemetry inputs.
+- Transaction/account graph, risk panels, rule evidence and detector provenance.
+- Staged canonical demo, correlated cases and persisted case history.
+- Analyst approval for simulated containment and action audit display.
 
-The dashboard should call the ARGUS backend on port `8000`. It must not call detector services directly; orchestration belongs in the backend.
+## Missing
 
-## Included capabilities
+There is no WebSocket subscriber, live payment feed or specialist mule/scam
+breakdown in this React app. The staged demo timeline is a presentation, not a
+live payment stream. Use the CLI watcher and standalone graph demo for those
+current capabilities. Financial-only cases and compliance reporting are also
+pending. See [TODO](../TODO.md).
 
-The first working dashboard includes:
+## Run
 
-- healthy-state monitoring;
-- staged account compromise and mule-transfer simulation;
-- Cytoscape transaction graph;
-- financial graph and eBPF risk panels;
-- ARGUS correlation explanation;
-- human containment approval; and
-- response audit trail.
-
-## Run locally
-
-Start the backend from the repository root:
+Install/start services using the root [README](../README.md), then:
 
 ```powershell
-.\.venv\Scripts\Activate.ps1
-python -m uvicorn backend.app.main:app --reload
+pnpm --dir frontend install --frozen-lockfile
+pnpm --dir frontend dev --host 127.0.0.1
 ```
 
-In a second terminal:
+Open [localhost:5173](http://127.0.0.1:5173). Use **DATA LAB** for custom batch
+analysis and **CANONICAL DEMO** for the staged cross-domain scenario. Override
+`VITE_API_BASE_URL` in the frontend environment before dev/build when necessary.
 
 ```powershell
-cd frontend
-pnpm install
-pnpm dev
+pnpm --dir frontend test
+pnpm --dir frontend build
 ```
 
-Open `http://127.0.0.1:5173` and click **Simulate Attack**. The default backend URL is `http://127.0.0.1:8000`; override it with `VITE_API_BASE_URL` only when necessary.
+Current tests cover API/helper behaviour and source labels, rather than a full
+rendered browser workflow. Keyboard, layout, graph rendering and complete user
+interaction checks remain part of the [release checklist](../docs/release-checklist.md).

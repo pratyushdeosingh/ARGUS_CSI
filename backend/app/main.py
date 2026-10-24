@@ -128,7 +128,7 @@ async def simulate_attack(
     store.save_transactions("DEMO-ATTACK", transactions)
     store.save_signal(graph_signal)
     store.save_signal(system_signal)
-    store.save_incident(demo_state.incident)
+    demo_state.incident = store.save_incident(demo_state.incident)
     return {
         "mode": "attack",
         "transactions": transactions,
@@ -371,7 +371,7 @@ async def analyze_caller_data(
                 system_signal=system_signal,
             )
         )
-        store.save_incident(incident)
+        incident = store.save_incident(incident)
         demo_state.incident = incident
 
     return AnalysisResponse(
@@ -393,7 +393,7 @@ def correlate_signals(
     demo_state.incident = correlate(request)
     store.save_signal(request.graph_signal)
     store.save_signal(request.system_signal)
-    store.save_incident(demo_state.incident)
+    demo_state.incident = store.save_incident(demo_state.incident)
     return demo_state.incident
 
 
@@ -429,12 +429,7 @@ def approve(
     actor: str = "human-analyst",
     store: ArgusStore = Depends(get_argus_store),
 ) -> dict[str, object]:
-    incident = (
-        demo_state.incident
-        if demo_state.incident is not None
-        and demo_state.incident.incident_id == incident_id
-        else store.get_incident(incident_id)
-    )
+    incident = store.get_incident(incident_id)
     if incident is None:
         raise HTTPException(status_code=404, detail="Incident not found")
     if incident.status is not IncidentStatus.AWAITING_APPROVAL:
@@ -445,7 +440,7 @@ def approve(
     incident, audit_events = approve_containment(incident, actor)
     demo_state.incident = incident
     demo_state.audit_events.extend(audit_events)
-    store.save_incident(incident)
+    incident = store.save_incident(incident)
     store.save_audit_events(incident_id, audit_events)
     return {"incident": incident, "audit_events": audit_events}
 

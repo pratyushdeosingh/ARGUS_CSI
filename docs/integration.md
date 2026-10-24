@@ -1,103 +1,126 @@
 # Integration contract
 
-## Rules
+## Shared data
 
-1. The schemas in `contracts/` are authoritative.
-2. Use JSON and UTF-8 over HTTP.
-3. Use UTC ISO-8601 timestamps ending in `Z`.
-4. Scores are floating-point values from `0.0` to `1.0`.
-5. Detector explanations must cite observable evidence.
-6. Unknown additional fields are rejected by the initial backend models.
-7. Coordinate contract changes in a pull request before merging.
+`contracts/` defines transaction, graph-signal and system-signal JSON schemas.
+Use UTF-8 JSON and UTC ISO-8601 timestamps (`Z` or `+00:00`). Core and batch
+transaction models reject naive/non-UTC timestamps and unknown fields. The
+specialist input also accepts `sender`/`receiver` aliases and normalizes its
+timestamp; it is a distinct convenience contract.
 
-## Graph detector interface
+A transaction contains `transaction_id`, `timestamp`, `source_account`,
+`destination_account`, `amount`, `currency`, `device_id`, `ip_address`, and
+`status` (`pending`, `completed`, `cancelled`). Amount must be positive.
 
-Recommended service URL: `http://127.0.0.1:8001`.
+Core graph/system risk is **0–1**. Specialist risk and its detector breakdown are
+**0–100**. Neither is a calibrated probability. Do not pass specialist values
+directly into the core correlation formula.
 
-```text
-GET  /health
-GET  /baseline
-POST /baseline/train
-POST /analyze
-POST /analyze-context
-```
+## Core API — port 8000
 
-`POST /analyze` accepts a JSON array of objects matching `transaction.schema.json` and returns one object matching `graph-signal.schema.json`.
-`POST /baseline/train` atomically replaces the detector's behavioral reference window with caller-supplied transactions. The next analysis is evaluated against that new baseline.
-`POST /analyze-context` evaluates transactions against a request-scoped baseline without changing shared detector state; ARGUS uses this atomic path for `/api/analyze` so concurrent analysts cannot contaminate one another's behavioral context.
+| Method | Path | Behaviour |
+| --- | --- | --- |
+| GET | `/health` | Process health; detector availability is separate |
+| POST | `/api/analyze` | Batch graph analysis with optional baseline/telemetry/system signal |
+| POST | `/api/transactions` | Persist one payment and attempt rolling graph scoring |
+| GET | `/api/transactions` | Stored payments; `limit` 1–200, `offset` >= 0 |
+| GET | `/api/transactions/{transaction_id}` | Stored payment or 404 |
+| WS | `/ws/transactions` | Transient transaction and alert event stream |
+| GET | `/api/detectors/status` | Availability, origin and infrastructure collection mode |
+| GET | `/api/platform/metrics` | Stored transaction/signal/case aggregates |
+| GET | `/api/incidents` | Persisted cases |
+| GET | `/api/incidents/{incident_id}` | One case or 404 |
+| POST | `/api/incidents/{incident_id}/approve` | Approve pending simulated containment; repeat returns 409 |
+| GET | `/api/audit?incident_id=...` | Stored simulated action audit |
+| POST | `/api/signals/correlate` | Cross-domain case from supplied graph and system signals |
+| GET | `/api/demo/normal` | Reset in-memory demo state; does not erase SQLite history |
+| POST | `/api/demo/simulate-attack` | Canonical two-detector demo; fixed demo case ID `INC-001` |
 
-## eBPF detector interface
+### Batch behaviour
 
-Recommended service URL: `http://127.0.0.1:8002`.
+`/api/analyze` accepts 1–5,000 transactions; optional baseline history, raw
+telemetry, a system signal or `correlate_with_latest_system` are supported.
+A supplied baseline uses graph `/analyze-context` without mutating the shared
+baseline. Graph-only success returns no system signal and no incident. With
+infrastructure evidence, correlation creates a case. Reanalysis preserves a
+contained case's stored state; it does not authorize another containment run.
 
-```text
-GET  /health
-POST /analyze-events
-POST /simulate
-GET  /signals/latest
-```
+The core stores input transactions and signals. Current transaction persistence
+is an upsert keyed by transaction ID, rather than an immutable revision ledger.
+See TODO P1-5 for the remaining consistency work.
 
-`GET /signals/latest` returns one object matching `system-signal.schema.json`. Replay mode must return the same shape as live mode.
-`POST /analyze-events` accepts raw process, file, and network observations plus caller-selected host/service metadata. It normalizes and scores those events without substituting the canonical replay fixture.
+### Stream behaviour
 
-## ARGUS interface
+Session precedence: `session_id` query parameter, `X-Session-ID` header, then
+transaction ID prefix before the final hyphen (or `INGESTED`). Use an explicit
+session for controlled demos. Windows include recent payments from that group,
+ordered by event timestamp and bounded by configured count/time limits.
 
-Recommended service URL: `http://127.0.0.1:8000`.
+Ingestion returns 201 for new data, 200 for an identical duplicate, 409 for a
+conflicting ID and 422 for invalid input. Successful ingestion is not proof of
+successful scoring. Detector errors leave the transaction stored and emit
+`transaction.analysis_failed`; duplicate delivery does not retry analysis.
 
-```text
-GET  /api/demo/normal
-POST /api/demo/simulate-attack
-GET  /api/detectors/status
-POST /api/analyze
-POST /api/signals/correlate
-GET  /api/platform/metrics
-GET  /api/incidents
-GET  /api/incidents/{incident_id}
-POST /api/incidents/{incident_id}/approve
-GET  /api/audit
-```
+Event envelopes contain `event_id`, `event_type`, `timestamp` and `data`.
+Supported types: `connection.established`, `transaction.received`,
+`transaction.scored`, `alert.created`, `transaction.analysis_failed`.
+The scored risk describes the rolling batch, not an independently calibrated
+probability for just the payment named by the event. Events are transient and
+broadcast to connected clients; missed events cannot be replayed. Scores are
+stored as signals, but financial-only alerts are not yet durable cases. React
+has no stream subscriber yet. No cross-request ordering guarantee is provided.
 
-`POST /api/analyze` is the primary non-demo path. It accepts arbitrary transactions and optional `baseline_transactions`, `telemetry_events`, a contract-valid `system_signal`, or a request to correlate with the latest system signal. A batch can complete as graph-only analysis when no infrastructure evidence is supplied. Caller data is never replaced by a fixture.
+## Graph API — port 8001
 
-The correlation request contains `graph_signal` and `system_signal`, populated using the matching schemas.
+- `GET /health`, `GET /baseline`: readiness/reference-window information.
+- `POST /baseline/train`: replace shared behavioural reference history; refresh
+  specialist baseline and history. This does not train the TGNN.
+- `POST /analyze`: transaction array to strict 0–1 `GraphSignal`.
+- `POST /analyze-context`: transactions plus request-scoped baseline.
+- `POST /visualize`: graph nodes and edges with suspicious markers.
+- `POST /score-transaction`: specialist 0–100 scoring response.
+- `GET /api/scenarios`, `POST /api/scenarios/{id}/run`: synthetic scenario demo;
+  each run uses separate history.
+- `POST /api/history/reset`: reset shared specialist history to its baseline.
+- `GET /demo` or `/`: standalone specialist demonstration.
 
-`POST /api/demo/simulate-attack` calls both detector services concurrently and
-returns `detector_status` alongside the signals. Status metadata is owned by
-ARGUS and does not change either shared detector schema. It reports service
-availability, whether the selected signal came from a service, last-known
-cache, or fixture, and live/replay mode when the eBPF service supplies it.
+Batch risk uses seven weighted rules; TGNN can promote the result only when
+rule risk >= 0.40. The bundled checkpoint is required at startup. The specialist
+engine separately fuses rules, TGNN, mule and scam scores using experimental
+weights. ALLOW/REVIEW/BLOCK are recommendations, with no payment enforcement.
 
-## Runtime modes
+Specialist history is per process and in memory. Individual history accesses
+are locked, but the entire score operation is not a database transaction. Use a
+single worker for demos; do not claim multi-worker consistency or restart
+persistence. Graph demo HTML loads Cytoscape from a CDN and needs network access.
 
-Configure ARGUS with environment variables from `.env.example`:
+## Optional infrastructure API — port 8002
 
-- `ARGUS_DETECTOR_MODE=auto` prefers services, then last-known signals, then fixtures.
-- `ARGUS_DETECTOR_MODE=fixture` provides the deterministic offline demo.
-- `ARGUS_DETECTOR_MODE=required` returns `503` rather than hiding an integration failure.
-- `GRAPH_DETECTOR_URL`, `EBPF_DETECTOR_URL`, and `DETECTOR_TIMEOUT_SECONDS` control connectivity.
-- `ARGUS_DB_PATH` selects the SQLite case-history database. Docker uses a named persistent volume.
+`GET /health`, `POST /analyze-events`, `POST /simulate` and
+`GET /signals/latest` provide raw telemetry analysis and latest replay/live
+system signals. Compose configures replay. Live collection requires the guarded
+Linux setup in `services/ebpf-detector/SETUP_LINUX.md`.
 
-When both teammate services are running, validate the actual contracts with:
+Cross-domain confidence = 0.50 × graph risk + 0.35 × infrastructure risk + a
+linkage bonus capped at 0.15. Shared IPs contribute 0.10; temporal proximity
+within 15 minutes contributes up to 0.05. High/critical cases await approval.
 
-```powershell
-python -m backend.app.integration_check
-```
+## Configuration and failures
 
-The command always uses required behavior and exits non-zero if either service is unavailable or returns an invalid contract. The canonical fixture remains useful as a deterministic integration probe; `/api/analyze` and the dashboard Data Lab prove arbitrary-data behavior.
+`ARGUS_DETECTOR_MODE=auto` enables service, last-known and fixture fallback for
+the canonical demo; `fixture` forces that demo's fixtures; `required` rejects
+unavailable detector services. Arbitrary batch and stream scoring never replace
+caller transactions with demo fixture output. Batch detector failure returns
+503; stream scoring failure is reported separately from ingestion success.
+The UI displays detector origin instead of presenting fallbacks as live output.
 
-## Integration sequence
+The backend reads process environment variables, not `.env` files. Compose maps
+its supported settings from the root `.env`; graph baseline and frontend build
+settings must be configured on their respective processes/images.
 
-1. The dashboard or API submits transactions, an optional baseline, and optional telemetry.
-2. ARGUS retrains Pratham's graph reference window when a baseline is supplied, then requests a fresh `GraphSignal`.
-3. Nitin's service analyzes caller telemetry or supplies its latest replay/live `SystemSignal`.
-4. ARGUS correlates independent evidence, derives a content-addressed incident, and persists the complete case.
-5. Low-risk cases remain monitored. High-impact response actions remain pending until explicit analyst approval.
-6. Approval results are persisted in the audit trail and reflected in platform metrics and history.
+## Verification
 
-## Failure handling
-
-- If the graph service is unavailable, display `Graph detector unavailable` and retain the last known signal.
-- If live eBPF is unavailable, visibly label the signal source as replay mode.
-- Never fabricate a successful detector connection in the dashboard.
-- Keep canonical fixtures available as a controlled fallback.
-- A fixture or last-known signal may keep the demo running, but its origin must remain visible.
+Run `python -m pytest -q`, frontend tests/build, then the service smoke commands
+in the README. The full CI starts containers and tests real HTTP/WebSocket
+boundaries. The verification report documents coverage and unverified behaviour;
+[TODO.md](../TODO.md) tracks implementation work.

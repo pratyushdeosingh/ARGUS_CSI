@@ -160,7 +160,8 @@ class ArgusStore:
                 ),
             )
 
-    def save_incident(self, incident: Incident) -> None:
+    def save_incident(self, incident: Incident) -> Incident:
+        """Persist a case without reopening an already contained investigation."""
         with self._lock, self._connect() as connection:
             connection.execute(
                 """
@@ -174,6 +175,7 @@ class ArgusStore:
                     status=excluded.status,
                     verdict=excluded.verdict,
                     payload=excluded.payload
+                WHERE incidents.status != 'contained'
                 """,
                 (
                     incident.incident_id,
@@ -185,6 +187,10 @@ class ArgusStore:
                     incident.model_dump_json(),
                 ),
             )
+            row = connection.execute(
+                "SELECT payload FROM incidents WHERE incident_id = ?", (incident.incident_id,)
+            ).fetchone()
+        return Incident.model_validate_json(row["payload"])
 
     def get_incident(self, incident_id: str) -> Incident | None:
         with self._lock, self._connect() as connection:

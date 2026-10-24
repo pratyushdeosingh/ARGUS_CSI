@@ -1,26 +1,49 @@
-# Demo script
+# Fintech demo walkthrough
 
-## Opening
+Use synthetic data and say which interface is being demonstrated. The payment
+stream, specialist scoring demo and React case workflow currently remain
+separate. Do not describe them as one completed financial investigation flow.
 
-“Traditional fraud tools often score transactions independently. ARGUS detects a coordinated campaign by correlating financial-network behavior with infrastructure telemetry.”
+## 1. Show the implemented financial analysis
 
-## Flow
+1. Start the stack using the README. Open the React dashboard and Data Lab.
+2. Run a clean control, then an account-takeover or fan-out batch.
+3. Inspect account connections, suspicious transactions, score and rule evidence.
+4. Explain that Data Lab starters can include infrastructure telemetry. A
+   financial-only `/api/analyze` request currently returns a score without a case.
 
-1. Show the healthy dashboard.
-2. Click **Canonical Demo**.
-3. Point out the new device and suspicious IP.
-4. Show money moving through the mule chain.
-5. Show the graph detector's risk and reasons.
-6. Show the eBPF detector's process/file/network indicators.
-7. Show ARGUS linking the shared IP and time window.
-8. Read the concise incident explanation.
-9. Show that critical actions await human approval.
-10. Approve containment and show the audit log.
-11. Open **Data Lab**, switch to **Structuring fan-out**, and run it unchanged.
-12. Show that different accounts, topology, IP, host, IDs, risk, evidence, and history were generated from the new payload.
+## 2. Show payment streaming
 
-## Closing
+1. Run `python scripts/watch_transactions.py` in a separate terminal.
+2. Replay `data/generated/normal.json` using a fresh `--run-id`.
+3. Replay `data/generated/mule.json` with another fresh `--run-id`.
+4. Inspect received/scored events and the mule alert. The score describes the
+   rolling session window; it is not a calibrated payment fraud probability.
+5. State that React live updates and durable financial-only alerts/cases are
+   next work. The watcher displays the stream today.
 
-“ARGUS turns disconnected fraud and infrastructure alerts into one explainable incident and a controlled response.”
+Full commands are in the README and `scripts/README.md`.
 
-Target duration: 2–3 minutes. If time is limited, use steps 1–10; the Data Lab is the proof against hard-coded-demo concerns.
+## 3. Show specialist mule/scam scoring
+
+1. Open `http://127.0.0.1:8001/demo` (its graph library requires CDN access).
+2. Compare normal, mule-account, scam fan-out and burst scenarios.
+3. Inspect rules/TGNN/mule/scam breakdown and reasons.
+4. Explain that this score uses a separate 0–100 experimental fusion and
+   in-memory history. BLOCK is a recommendation; no bank action occurs.
+5. State that the TGNN was trained on synthetic canonical batches. There are
+   no held-out accuracy, SHAP or production-readiness claims.
+
+## 4. Optional existing cross-domain workflow
+
+Use the React canonical demo to show infrastructure replay, correlation,
+analyst-approved simulated containment and stored action audit. Replaying a
+contained case does not reopen it; the reset button clears display state, not
+persistent cases. Use a separate demo database for a fresh approval walkthrough.
+
+## Close with the next work
+
+Show `TODO.md`: unified scoring, financial-only cases, live React updates,
+recoverable scoring/alerts, independent ML evaluation and compliance workflow.
+Show the CI result and verification report as engineering evidence, rather
+than representing passing synthetic tests as proof of real-world accuracy.

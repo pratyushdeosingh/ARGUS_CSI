@@ -1,37 +1,46 @@
-# ARGUS release checklist
+# Fintech release checklist
 
-Use this checklist before a demo, release, or merge to `main`.
+This is a repeatable verification checklist, not a claim that unchecked fintech
+features exist. Implementation work and owners are in [TODO](../TODO.md).
 
-## Automated verification
+## Automated checks
 
-- Run `python -m pytest -q` from the repository root.
-- Run `pnpm --dir frontend test`.
-- Run `pnpm --dir frontend build`.
-- Confirm GitHub Actions passes on the target commit.
+- [ ] Run the complete Python suite in a supported environment.
+- [ ] Run frontend tests and production build.
+- [ ] Confirm CI passes on the exact PR head being merged.
+- [ ] Confirm all containers build and health checks pass.
+- [ ] Run actual HTTP/WebSocket smoke checks, including invalid/conflicting
+  payment rejection, all specialist scenarios and graph-only response shape.
+- [ ] Verify payment, contained case and audit persistence after backend restart.
+- [ ] Verify batch detector failure is visible and ingestion persists with a
+  streamed analysis-failed event during a graph outage.
 
-## Integrated runtime
+## Manual interface checks
 
-- Start the four-component stack with `docker compose up --build`.
-- Confirm the dashboard opens at `http://127.0.0.1:5173`.
-- Confirm both detector cards show a service origin; replay mode is expected for eBPF under Compose.
-- Run `python -m backend.app.integration_check` when starting services manually.
-- Trigger the canonical attack and confirm incident `INC-001` is critical.
-- Approve containment and confirm exactly three simulated actions enter the audit log.
-- Run the Data Lab fan-out and clean-control starters; confirm their content-derived IDs and outcomes differ.
-- Restart the backend and confirm incident history remains available from SQLite.
+- [ ] Open React, run clean and suspicious Data Lab inputs, and inspect graph,
+  evidence, errors, provenance and history.
+- [ ] Open the standalone graph demo and inspect each scenario and score scale.
+- [ ] Run watcher and replay scripts using fresh run IDs.
+- [ ] Demonstrate simulated approval once on a fresh case and verify repeat
+  approval is rejected; reanalysis must preserve containment and its audit.
+- [ ] Check keyboard use and narrow-screen layout. These interactions are not
+  covered by the existing frontend helper tests or the HTTP smoke script.
 
-## Demo integrity
+## Submission accuracy
 
-- Use only synthetic fixtures or non-sensitive Data Lab inputs.
-- Keep canonical identifiers unchanged when presenting the deterministic canonical path.
-- Never describe fixture or replay results as live telemetry.
-- Never connect containment actions to a real account, service, or network control.
-- Keep critical actions behind explicit analyst approval.
+- [ ] Match the final competition rubric against the team's requirement list.
+- [ ] Update README coverage only for demonstrated capabilities.
+- [ ] Label synthetic data, replay telemetry, simulated actions and model limits.
+- [ ] Keep 0–1 graph scores separate from 0–100 specialist scores.
+- [ ] Do not claim React streaming, financial-only cases, compliance reporting,
+  held-out accuracy or SHAP until their TODO acceptance criteria pass.
+- [ ] Record tested commit, CI link, manual-check results and remaining gaps in
+  the verification report.
 
-## Presentation readiness
+## Runtime hygiene
 
-- Reset the dashboard to the healthy state before presenting.
-- Explain the shared IP and eight-second time linkage between the two signals.
-- State that the graph detector is deterministic and explainable.
-- State that eBPF replay makes the demo portable while the same contract supports live Linux collection.
-- Close by showing the containment audit trail.
+- [ ] Use an isolated synthetic/demo database for smoke checks.
+- [ ] Confirm `.env` is exported for manual processes or mapped by Compose.
+- [ ] Keep runtime databases and local test artifacts out of image build context.
+- [ ] Preserve the named database volume when stopping a demo. Use `down -v`
+  only when intentionally deleting its stored history.

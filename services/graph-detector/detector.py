@@ -42,11 +42,16 @@ def _anomaly_type(evidence: Evidence, risk_score: float, tgnn_score: float) -> s
     return "anomalous_transaction_activity" if (risk_score >= 0.25 or tgnn_score >= 0.25) else "low_risk_activity"
 
 
-def _signal_id(transactions: list[Transaction]) -> str:
+def _signal_id(transactions: list[Transaction], baseline: list[Transaction] | None = None) -> str:
     material = "|".join(
-        item.transaction_id
+        item.model_dump_json()
         for item in sorted(transactions, key=lambda value: (value.timestamp, value.transaction_id))
     )
+    if transactions and baseline:
+        material += "|baseline|" + "|".join(
+            item.model_dump_json()
+            for item in sorted(baseline, key=lambda value: (value.timestamp, value.transaction_id))
+        )
     return f"GRAPH-{sha256(material.encode('utf-8')).hexdigest()[:12].upper()}"
 
 
@@ -130,7 +135,7 @@ class GraphDetector:
             timestamp = datetime.now(UTC).replace(microsecond=0)
 
         return GraphSignal(
-            signal_id=_signal_id(transactions),
+            signal_id=_signal_id(transactions, baseline),
             timestamp=timestamp,
             risk_score=combined_score,
             anomaly_type=_anomaly_type(evidence, combined_score, tgnn_score if model_corroborated else 0.0),
