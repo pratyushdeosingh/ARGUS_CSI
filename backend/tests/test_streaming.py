@@ -332,6 +332,29 @@ def test_rolling_window_chronological_retrieval(isolated_store: ArgusStore) -> N
     assert window[1].transaction_id == "A-2"
 
 
+def test_rolling_window_keeps_newest_payments_and_handles_mixed_timestamp_formats(isolated_store):
+    from datetime import timedelta
+
+    base = datetime(2026, 10, 23, 10, 0, tzinfo=timezone.utc)
+    for index in range(5):
+        tx = Transaction.model_validate(make_transaction_payload(
+            transaction_id=f"WINDOW-{index}",
+            timestamp=(base + timedelta(seconds=index, microseconds=500000)).isoformat(),
+        ))
+        # Batch analysis and streaming ingestion use different timestamp encodings.
+        if index % 2:
+            isolated_store.save_transactions("WINDOW", [tx])
+        else:
+            isolated_store.ingest_transaction(tx, "WINDOW")
+
+    window = isolated_store.get_recent_transactions_window(
+        end_timestamp=base + timedelta(seconds=4, microseconds=500000),
+        max_count=2, batch_id="WINDOW",
+    )
+    assert [tx.transaction_id for tx in window] == ["WINDOW-3", "WINDOW-4"]
+    assert isolated_store.get_transaction("WINDOW-4").timestamp.microsecond == 500000
+
+
 def test_normal_dataset_low_risk_streaming(client: TestClient) -> None:
     """Streaming normal transactions produces low risk scores and no alerts."""
     normal_file = Path("data/generated/normal.json")

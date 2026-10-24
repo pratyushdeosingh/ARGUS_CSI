@@ -27,6 +27,12 @@ class Settings:
         threshold = float(os.getenv("FRAUD_ALERT_THRESHOLD", "0.70"))
         window_minutes = int(os.getenv("ANALYSIS_WINDOW_MINUTES", "15"))
         max_transactions = int(os.getenv("ANALYSIS_MAX_TRANSACTIONS", "100"))
+        if not 0 <= threshold <= 1:
+            raise ValueError("FRAUD_ALERT_THRESHOLD must be between zero and one")
+        if window_minutes <= 0:
+            raise ValueError("ANALYSIS_WINDOW_MINUTES must be positive")
+        if not 1 <= max_transactions <= 5000:
+            raise ValueError("ANALYSIS_MAX_TRANSACTIONS must be between 1 and 5000")
         return cls(
             detector_mode=mode,
             graph_detector_url=os.getenv(
@@ -45,4 +51,3 @@ class Settings:
 def get_settings() -> Settings:
     """Dependency provider for FastAPI."""
     return Settings.from_env()
-

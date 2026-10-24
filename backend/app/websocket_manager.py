@@ -66,7 +66,7 @@ class WebSocketManager:
 
     async def broadcast(self, event: dict[str, Any]) -> None:
         """Broadcast a JSON event envelope to all connected clients concurrently.
-        
+
         Failed or disconnected clients are pruned cleanly without interrupting
         delivery to other healthy clients.
         """

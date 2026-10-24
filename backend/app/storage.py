@@ -294,7 +294,7 @@ class ArgusStore:
         else:
             effective_batch = batch_id
 
-        ts_str = item.timestamp.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        ts_str = item.timestamp.astimezone(timezone.utc).isoformat()
 
         with self._lock, self._connect() as connection:
             existing = connection.execute(
@@ -358,25 +358,25 @@ class ArgusStore:
         Sorted chronologically (timestamp ASC, transaction_id ASC).
         """
         start_timestamp = end_timestamp - timedelta(minutes=window_minutes)
-        start_str = start_timestamp.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-        end_str = end_timestamp.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        start_str = start_timestamp.astimezone(timezone.utc).isoformat()
+        end_str = end_timestamp.astimezone(timezone.utc).isoformat()
 
         query = """
             SELECT payload FROM transaction_events
-            WHERE timestamp >= ? AND timestamp <= ?
+            WHERE julianday(timestamp) >= julianday(?) AND julianday(timestamp) <= julianday(?)
         """
         params: list[object] = [start_str, end_str]
         if batch_id is not None:
             query += " AND batch_id = ?"
             params.append(batch_id)
 
-        query += " ORDER BY timestamp ASC, transaction_id ASC LIMIT ?"
+        query += " ORDER BY julianday(timestamp) DESC, transaction_id DESC LIMIT ?"
         params.append(max_count)
 
         with self._lock, self._connect() as connection:
             rows = connection.execute(query, params).fetchall()
 
-        return [Transaction.model_validate_json(row["payload"]) for row in rows]
+        return [Transaction.model_validate_json(row["payload"]) for row in reversed(rows)]
 
 
     def get_transaction(self, transaction_id: str) -> Transaction | None:

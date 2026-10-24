@@ -1,4 +1,4 @@
-# ARGUS — Cross-Domain Financial Threat Intelligence
+# ARGUS — Explainable Financial Fraud Intelligence
 
 [![CI](https://github.com/pratyushdeosingh/ARGUS_CSI/actions/workflows/ci.yml/badge.svg)](https://github.com/pratyushdeosingh/ARGUS_CSI/actions/workflows/ci.yml)
 
@@ -7,6 +7,20 @@ ARGUS is a Financial Security Operations Center that detects when suspicious mon
 This is not a dashboard wrapped around one hard-coded scenario. The canonical demo is only a safe presentation path. Open **DATA LAB** to edit or paste completely different transaction, baseline, and telemetry JSON and generate content-derived signals, incident IDs, evidence, actions, metrics, and history.
 
 > **Safety boundary:** all bundled identities and events are synthetic. Response actions are simulated. Do not connect this prototype directly to production accounts, secrets, infrastructure, or enforcement controls.
+
+## Fintech submission
+
+ARGUS is being extended for Problem Statement #9: explainable payment fraud,
+mule networks, scam signals, and continuous transaction monitoring. The existing
+infrastructure detector remains available for optional cross-domain investigation.
+See [the fintech integration status and remaining work](docs/fintech-submission.md)
+for the verified scope, current limitations, and updated team ownership.
+
+New teammate capabilities include `POST /api/transactions` for durable ingestion,
+`/ws/transactions` for received/scored/alert events, synthetic replay tools in
+[`scripts/`](scripts/README.md), and a graph-service transaction risk engine at
+`POST /score-transaction` with a standalone demo at `http://127.0.0.1:8001/demo`.
+The React dashboard does not yet subscribe to the WebSocket stream.
 
 ## The problem
 
@@ -274,9 +288,11 @@ pytest.ini                    Integrated Python test discovery
 
 | Contributor | Primary ownership | Integrated result |
 |---|---|---|
-| Pratyush | ARGUS core, dashboard, integration | Cross-service orchestration, response policy, persistent cases, analyst experience |
-| Pratham | Graph detector | Adaptive behavioral baseline, graph/temporal features, explainable financial signal |
-| Nitin | Infrastructure detector | Safe bpftrace collector, replay, arbitrary telemetry normalization and scoring |
+| Pratyush | ML evaluation, ARGUS core, integration, RegTech | Risk fusion, financial cases, compliance workflow, end-to-end integration |
+| Pratham | Graph intelligence and mule detection | Adaptive baseline, TGNN prototype, mule/scam scoring and explanations |
+| Yojit | Real-time processing, scam integration, React dashboard | Transaction simulator, durable ingestion and WebSocket stream; live React integration pending |
+
+The existing infrastructure detector was contributed by Nitin and remains integrated.
 
 The product value comes from the integration: neither detector alone declares a coordinated incident, and the UI never bypasses the core policy layer.
 
