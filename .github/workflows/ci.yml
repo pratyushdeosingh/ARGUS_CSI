@@ -67,7 +67,18 @@ jobs:
       - name: Verify real service integration
         run: |
           python -m backend.app.integration_check
-          python scripts/check_integrated_stack.py
+          python scripts/check_integrated_stack.py --state-file "$RUNNER_TEMP/argus-smoke.json"
+
+      - name: Verify persistence after backend restart
+        run: |
+          docker compose restart argus-backend
+          docker compose up -d --wait --wait-timeout 120
+          python scripts/check_integrated_stack.py --state-file "$RUNNER_TEMP/argus-smoke.json" --check-persistence
+
+      - name: Verify graph detector outage handling
+        run: |
+          docker compose stop graph-detector
+          python scripts/check_integrated_stack.py --check-detector-failure
 
       - name: Show container logs on failure
         if: failure()

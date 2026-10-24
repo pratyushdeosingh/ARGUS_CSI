@@ -6,7 +6,7 @@ Integrates:
 3. Dedicated Mule Account detector
 4. Dedicated Scam / Fan-out detector
 
-Produces a unified, calibrated risk score (0-100), risk band, decision
+Produces a experimental heuristic risk score (0-100), risk band, decision
 (ALLOW, REVIEW, BLOCK), and grounded explainable AI narrative.
 """
 

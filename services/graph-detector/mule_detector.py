@@ -15,7 +15,7 @@ from history import BaseHistoryStore
 from graph_models import Transaction, TransactionStatus
 
 
-# Calibrated feature weights (sum to 1.00)
+# Heuristic feature weights (sum to 1.00)
 MULE_WEIGHTS = {
     "fan_in": 0.25,              # Multiple distinct accounts sending money to one account
     "forwarding_speed": 0.25,    # Money received and transferred out shortly afterward
@@ -29,7 +29,7 @@ MULE_WEIGHTS = {
 class MuleScoreResult:
     """Detailed mule evaluation results with score and feature breakdown."""
     account: str
-    mule_score: float  # Calibrated 0-100 score
+    mule_score: float  # Heuristic 0-100 score
     fan_in_score: float
     forwarding_speed_score: float
     turnover_score: float

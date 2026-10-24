@@ -573,7 +573,7 @@ function App() {
           <span className={classNames("system-status", detectorStatus && !detectorsHealthy && "degraded")}>
             <i /> {detectorsHealthy ? "SYSTEM OPERATIONAL" : detectorStatus ? "DETECTORS DEGRADED" : "CHECKING SERVICES"}
           </span>
-          <span className="environment">LIVE INTELLIGENCE · SAFE LAB</span>
+          <span className="environment">FINANCIAL INTELLIGENCE · SYNTHETIC LAB</span>
         </div>
         <div className="topbar-actions">
           <span className="utc-clock"><Clock3 size={14} /> {utcTime.toISOString().slice(11, 19)} UTC</span>

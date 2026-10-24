@@ -1,251 +1,215 @@
-# ARGUS — Explainable Financial Fraud Intelligence
+# ARGUS — Financial Fraud Intelligence
 
 [![CI](https://github.com/pratyushdeosingh/ARGUS_CSI/actions/workflows/ci.yml/badge.svg)](https://github.com/pratyushdeosingh/ARGUS_CSI/actions/workflows/ci.yml)
 
-ARGUS is a Financial Security Operations Center that detects when suspicious money movement and compromised payment infrastructure are part of the same attack. It analyzes arbitrary transaction batches, learns a caller-supplied behavioral baseline, evaluates raw host telemetry, correlates independent evidence, creates a durable incident, and keeps high-impact containment behind analyst approval.
+ARGUS is a fintech prototype for analysing payment transactions, detecting
+suspicious account behaviour and mule-like fund movement, and presenting risk
+scores with evidence. It provides batch analysis, transaction ingestion,
+WebSocket events, and a separate experimental transaction scoring engine.
 
-This is not a dashboard wrapped around one hard-coded scenario. The canonical demo is only a safe presentation path. Open **DATA LAB** to edit or paste completely different transaction, baseline, and telemetry JSON and generate content-derived signals, incident IDs, evidence, actions, metrics, and history.
+**Status: partially implemented for Problem Statement #9.** The existing paths
+are tested; the complete fintech workflow is still under development. The
+coverage below follows the requirements supplied by the team. It is not a claim
+of complete compliance with an independently verified competition rubric.
 
-> **Safety boundary:** all bundled identities and events are synthetic. Response actions are simulated. Do not connect this prototype directly to production accounts, secrets, infrastructure, or enforcement controls.
+- [Prioritized work checklist](TODO.md)
+- [Verification results and limits](docs/verification.md)
+- [API contracts and integration boundaries](docs/integration.md)
+- [Demo walkthrough](docs/demo-script.md)
 
-## Fintech submission
+## Coverage of the fintech requirements
 
-ARGUS is being extended for Problem Statement #9: explainable payment fraud,
-mule networks, scam signals, and continuous transaction monitoring. The existing
-infrastructure detector remains available for optional cross-domain investigation.
-See [the fintech integration status and remaining work](docs/fintech-submission.md)
-for the verified scope, current limitations, and updated team ownership.
+| Requirement | Current implementation | Gap |
+| --- | --- | --- |
+| Suspicious transaction detection | Rules for amount, velocity, identity changes, new beneficiaries and money flow | Independent accuracy evaluation |
+| Fraudulent customer behaviour | Comparison with supplied historical transactions | No customer/KYC ingestion or validated customer classifier |
+| Graph analytics | Directed account graph, temporal paths, forwarding and fan-in/fan-out | Explicit cycle detection, communities and centrality-based investigation |
+| Mule detection | Temporal money-flow rules; specialist fan-in, forwarding and turnover heuristics | Specialist results are separate from core scoring and React |
+| Scam detection | Specialist fan-out, burst, repeated-amount and volume-surge heuristics | Broader labelled scam evaluation and core/UI integration |
+| AI/ML | PyTorch temporal graph neural network with a bundled checkpoint | Trained on synthetic demo batches; no independent held-out evaluation |
+| Explainability | Rule evidence, account/transaction references and specialist detector breakdown | No SHAP or validated ML attribution; node scores are not feature attribution |
+| Real-time payments | Per-payment HTTP ingestion, rolling graph analysis and WebSocket events | No durable alert queue/retry pipeline; React does not subscribe yet |
+| Investigation cases | SQLite cases, analyst approval and simulated actions for cross-domain analysis | Financial-only scores/stream alerts do not yet create durable cases |
+| RegTech | Case history and simulated response audit trail | Compliance workflow and draft suspicious activity reporting |
+| Evaluation and datasets | Synthetic normal/attack fixtures and scenario tests | Representative dataset, held-out splits, precision, recall, F1, PR-AUC and false-positive analysis |
 
-New teammate capabilities include `POST /api/transactions` for durable ingestion,
-`/ws/transactions` for received/scored/alert events, synthetic replay tools in
-[`scripts/`](scripts/README.md), and a graph-service transaction risk engine at
-`POST /score-transaction` with a standalone demo at `http://127.0.0.1:8001/demo`.
-The React dashboard does not yet subscribe to the WebSocket stream.
+## Working application paths
 
-## The problem
+### Batch financial analysis
 
-A fraud team may see an account suddenly disperse funds through mule accounts. At the same moment, an infrastructure team may see the payment worker spawn a shell, access a sensitive path, and contact a suspicious destination. In separate queues, both alerts are noisy. Together, they describe a coordinated account-takeover and payment-service compromise.
+`POST /api/analyze` accepts 1–5,000 transactions and optional baseline history.
+The backend calls the graph service and stores transactions and its signal.
+Without infrastructure evidence, the response has `system_signal: null` and
+`incident: null`. Supplying telemetry or a system signal enables the existing
+cross-domain incident workflow.
 
-ARGUS joins those worlds and answers four questions an analyst actually cares about:
+The graph service evaluates seven rules and the TGNN. Batch model risk can raise
+the rule score only when independent rule risk is at least `0.40`. This guard
+limits unsupported promotions by the demo-trained model; it is not model
+calibration. Graph signal risk ranges from **0 to 1** and is not a calibrated
+fraud probability. Signal identity includes transaction contents and the baseline.
 
-1. **What happened?** An explainable graph and temporal detector identifies identity changes, amount anomalies, beneficiary novelty, velocity, multi-hop movement, forwarded funds, and fan-in/fan-out.
-2. **Was the payment system involved?** Process, file, and network telemetry is normalized into a second independent risk signal.
-3. **Do the signals belong to the same attack?** ARGUS evaluates time proximity, shared network indicators, and both risk scores.
-4. **What should happen next?** A severity-aware policy recommends monitoring or targeted simulated containment, requiring human approval for high-impact actions.
+### Continuous ingestion and alerts
 
-## What makes it different
+`POST /api/transactions` persists one payment and scores a recent transaction
+window. Identical delivery returns `200`; a new payment returns `201`; a reused
+ID with different data returns `409`. Invalid input returns `422`.
 
-- **Arbitrary data, not fixture substitution.** `POST /api/analyze` accepts 1–5,000 caller transactions, an optional behavioral baseline, and optional raw telemetry. Arbitrary analysis fails visibly if a required detector cannot process the data; it never silently swaps in the canonical fixture.
-- **Adaptive baseline.** The graph detector can replace its reference window at runtime, allowing the same engine to reason about different customers, devices, beneficiaries, currencies, and spending patterns.
-- **Cross-domain correlation.** Financial and infrastructure evidence is combined using transparent scoring and graded time/IP bonuses.
-- **Content-derived identity.** Analysis, graph signal, system signal, and incident IDs are hashes of their inputs, making runs reproducible without pretending every event is `INC-001`.
-- **Durable case memory.** Transactions, signals, incidents, approvals, and audit records are stored in SQLite and survive backend restarts. Docker mounts the database in a named volume.
-- **Human-governed response.** Informational and suspicious results remain under monitoring; high and critical incidents can recommend account freeze, transfer cancellation, or service isolation, but execution requires an analyst.
-- **Visible provenance.** The dashboard distinguishes live/replay service output, last-known signals, fixtures, degraded services, and unavailable detectors.
-- **Safe eBPF story.** The system supports deterministic replay everywhere and a deliberately constrained bpftrace collector on a privileged Linux host.
+Use an explicit `session_id` query parameter or `X-Session-ID` header to group a
+stream. Without one, the transaction ID prefix is used as a demo grouping rule;
+unrelated prefixes will not share a scoring window. Analysis runs within the
+request, rather than through a separate streaming worker.
+
+`/ws/transactions` emits `connection.established`, `transaction.received`,
+`transaction.scored`, `alert.created`, and `transaction.analysis_failed` events.
+A scoring failure does not undo ingestion. Alerts are transient WebSocket events;
+there is no durable replay of missed alerts or automatic rescore on duplicate
+payment delivery. Watcher and replay scripts are provided below.
+
+### Specialist scoring
+
+The graph service exposes `POST /score-transaction` and a standalone `/demo`.
+It combines rules, TGNN, mule and scam heuristics into a **0–100** score with
+`ALLOW`, `REVIEW` or `BLOCK` recommendations. These recommendations do not execute
+payment controls. This experimental fusion is separate from the core batch/
+stream score, and its history is in memory. Use a single graph-service worker.
+
+### Analyst dashboard and optional infrastructure evidence
+
+The React dashboard provides batch Data Lab analysis, account graphs, evidence,
+detector provenance, case history and simulated containment approval. Its
+canonical demo correlates financial risk with process/file/network telemetry.
+The infrastructure detector runs in replay mode under Docker; guarded live
+collection requires Linux and bpftrace.
+
+The React dashboard currently has no WebSocket subscription or specialist score
+breakdown. Use the watcher for streaming and the graph demo for specialist scores.
+Containment is simulated. Replaying the same contained case preserves its stored
+approval state and audit trail.
 
 ## Architecture
 
 ```mermaid
 flowchart LR
-    INPUT["Transactions + optional baseline"] --> GRAPH["Graph intelligence<br/>NetworkX + temporal rules"]
-    TELEMETRY["Raw process / file / network events"] --> EBPF["Infrastructure intelligence<br/>normalization + scoring"]
-    GRAPH -->|GraphSignal| CORE["ARGUS correlation + policy"]
-    EBPF -->|SystemSignal| CORE
-    CORE --> INCIDENT["Explainable incident"]
-    INCIDENT --> STORE["SQLite case history + audit"]
-    STORE --> UI["React Financial SOC"]
-    UI --> HUMAN{"Analyst approval"}
-    HUMAN -->|approved| ACTIONS["Simulated targeted containment"]
+    Batch[Batch input] --> Core[FastAPI core :8000]
+    Payments[Payment HTTP ingestion] --> Core
+    Core --> Graph[Graph rules + TGNN :8001]
+    Core --> Store[(SQLite transactions, signals, cases, audit)]
+    Core --> WS[WebSocket events / CLI watcher]
+    React[React batch dashboard :5173] --> Core
+    Telemetry[Optional infrastructure service :8002] --> Core
+    Specialist[Specialist API / graph demo] --> Engine[Rules + TGNN + mule + scam]
+    Engine --> Memory[In-memory history]
 ```
 
-All detector boundaries use typed Pydantic models and the shared JSON schemas in [`contracts/`](contracts/). The browser talks only to the ARGUS backend; detector orchestration, fallback policy, persistence, and approval logic remain server-side.
+The specialist engine and live WebSocket stream are not yet connected to the
+React analyst workflow. See [architecture details](docs/architecture.md).
 
-| Component | Responsibility | Technology | Port |
-|---|---|---|---:|
-| ARGUS core | Analysis orchestration, correlation, policy, persistence, metrics, incident approval, audit | FastAPI + SQLite + HTTPX | `8000` |
-| Graph detector | Behavioral baseline and explainable transaction graph/temporal risk | FastAPI + NetworkX | `8001` |
-| Infrastructure detector | Replay/live collection, raw telemetry normalization, host risk | FastAPI + bpftrace/replay | `8002` |
-| Financial SOC | Data Lab, graph visualization, evidence, provenance, response, history | React + TypeScript + Cytoscape | `5173` |
+## Run with Docker
 
-## How detection works
-
-### Financial intelligence
-
-The graph detector builds a directed account network and evaluates seven observable features:
-
-| Feature | Weight | Example |
-|---|---:|---|
-| Rapid multi-hop path | `0.30` | Funds move across multiple accounts in a short window |
-| Funds forwarded | `0.18` | A beneficiary quickly becomes a sender |
-| Unusual amount | `0.17` | Current value departs sharply from the supplied baseline |
-| Identity change | `0.10` | New device or IP appears for an established account |
-| Velocity | `0.10` | Transfers cluster unusually tightly in time |
-| New beneficiary | `0.08` | Destination is absent from historical behavior |
-| Fan-in/fan-out | `0.07` | One account rapidly distributes to or aggregates from many peers |
-
-Independent findings receive a small corroboration bonus, capped at `0.08`. The result includes the anomaly type, risk, suspicious accounts and transactions, related IPs, and plain-language reasons.
-
-### Infrastructure intelligence
-
-Raw events are normalized into process, file, and network categories. Suspicious categories contribute once, preventing duplicate-event inflation:
-
-```text
-host risk = 0.03 baseline
-          + 0.26 suspicious process behavior
-          + 0.26 suspicious file behavior
-          + 0.32 suspicious network behavior
-```
-
-The caller's actual destination IP, host, service, and process are preserved in the signal. Replay and live collection produce the same contract.
-
-### Correlation and decision policy
-
-```text
-confidence = 0.50 × graph risk
-           + 0.35 × infrastructure risk
-           + up to 0.15 shared-evidence bonus
-```
-
-The bonus is based on signal proximity within a 15-minute correlation window and shared IP evidence. Verdicts, summaries, affected accounts, evidence, and actions are derived from the signals.
-
-| Confidence | Severity | Initial state |
-|---:|---|---|
-| `≥ 0.85` | Critical | Awaiting analyst approval |
-| `≥ 0.70` | High | Awaiting analyst approval |
-| `≥ 0.40` | Suspicious | Monitoring |
-| `< 0.40` | Informational | Monitoring |
-
-## Quick start — Docker
-
-Docker Compose is the easiest four-service setup. It uses safe replay telemetry and persists ARGUS history in the `argus-runtime` volume.
-
-### Prerequisites
-
-- Git
-- Docker Desktop or Docker Engine with Compose v2
+Requires Git and Docker Engine/Desktop with Compose v2 running.
 
 ```bash
 git clone https://github.com/pratyushdeosingh/ARGUS_CSI.git
 cd ARGUS_CSI
-docker compose up --build
+docker compose up --build -d --wait --wait-timeout 120
 ```
 
-Open these pages:
+| Interface | URL |
+| --- | --- |
+| React dashboard / Data Lab | [localhost:5173](http://127.0.0.1:5173) |
+| Core API docs | [localhost:8000/docs](http://127.0.0.1:8000/docs) |
+| Graph API docs | [localhost:8001/docs](http://127.0.0.1:8001/docs) |
+| Specialist scoring demo | [localhost:8001/demo](http://127.0.0.1:8001/demo) |
+| Optional infrastructure API docs | [localhost:8002/docs](http://127.0.0.1:8002/docs) |
 
-| What to inspect | URL |
-|---|---|
-| Financial SOC dashboard and Data Lab | [http://127.0.0.1:5173](http://127.0.0.1:5173) |
-| ARGUS API and arbitrary-analysis contract | [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs) |
-| Graph detector API and adaptive baseline | [http://127.0.0.1:8001/docs](http://127.0.0.1:8001/docs) |
-| Infrastructure detector and telemetry endpoint | [http://127.0.0.1:8002/docs](http://127.0.0.1:8002/docs) |
+Compose starts all four services, including infrastructure replay. Financial
+analysis itself can run without supplying infrastructure evidence. Database
+history is stored in the `argus-runtime` named volume. Stop with
+`docker compose down`; `down -v` deletes that volume and its history.
 
-Stop with `Ctrl+C`, then run `docker compose down`. Add `-v` only when you intentionally want to delete persisted ARGUS history.
+## Run without Docker
 
-## Two ways to demonstrate it
-
-### 1. Polished 90-second story
-
-1. Wait for **SYSTEM OPERATIONAL**.
-2. Select **CANONICAL DEMO** and follow the staged attack timeline.
-3. Compare financial and host findings, then inspect shared evidence in the ARGUS verdict.
-4. Select **APPROVE CONTAINMENT** and verify that every action appears in the audit trail.
-
-### 2. Prove it is not hard-coded
-
-1. Select **DATA LAB**.
-2. Try **Adaptive account takeover**, **Structuring fan-out**, and **Clean control batch**. They use different accounts, topologies, devices, IPs, hosts, services, and outcomes.
-3. Edit any JSON field—or paste your own arrays—and run cross-domain analysis.
-4. Verify that graph nodes, scores, timeline, signal IDs, incident ID, evidence, recommended actions, metrics, and history change with the input.
-5. Restart the backend and confirm the incident remains in persistent history.
-
-The Data Lab starter data is intentionally synthetic and fully editable; it is not a claim of production fraud accuracy.
-
-## Run locally without Docker
-
-Python 3.11+ and Node.js 22+ are recommended. From the repository root:
+Use Python 3.11 or 3.12, Node.js 22 and pnpm 11.22.0. From the repository root:
 
 ```powershell
 py -3.11 -m venv .venv
 .\.venv\Scripts\Activate.ps1
-python -m pip install -r backend/requirements.txt
-python -m pip install -r services/graph-detector/requirements.txt
-python -m pip install -r services/ebpf-detector/requirements.txt
-corepack enable
+python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+python -m pip install -r backend/requirements.txt -r services/graph-detector/requirements.txt -r services/ebpf-detector/requirements.txt
+npm install --global pnpm@11.22.0
 pnpm --dir frontend install --frozen-lockfile
 ```
 
-Start one process per terminal:
+Start each process in a separate terminal with the virtual environment activated:
 
 ```powershell
-# Terminal 1 — graph detector
+# Graph service
 python -m uvicorn app:app --app-dir services/graph-detector --host 127.0.0.1 --port 8001
 ```
 
 ```powershell
-# Terminal 2 — portable infrastructure replay detector
+# Infrastructure replay (needed for the cross-domain demo)
 $env:ARGUS_EBPF_MODE = "replay"
 python -m uvicorn api:app --app-dir services/ebpf-detector --host 127.0.0.1 --port 8002
 ```
 
 ```powershell
-# Terminal 3 — ARGUS core; no silent fixture fallback
+# Core backend
 $env:ARGUS_DETECTOR_MODE = "required"
-$env:GRAPH_DETECTOR_URL = "http://127.0.0.1:8001"
-$env:EBPF_DETECTOR_URL = "http://127.0.0.1:8002"
-$env:ARGUS_DB_PATH = "data/argus.db"
 python -m uvicorn backend.app.main:app --host 127.0.0.1 --port 8000
 ```
 
 ```powershell
-# Terminal 4 — dashboard
+# Dashboard
 pnpm --dir frontend dev --host 127.0.0.1
 ```
 
-On macOS/Linux, activate with `source .venv/bin/activate`, use `python3` if required, and set variables with `export NAME=value`.
+On macOS/Linux, use `python3`, `source .venv/bin/activate`, and `export NAME=value`.
+The checkpoint in `services/graph-detector/tgnn_weights.pt` is required for graph
+startup. Startup does not train a model or silently substitute random weights.
 
-## API surface
+## Demonstrate streaming
 
-| Method | Endpoint | Purpose |
-|---|---|---|
-| `POST` | `/api/analyze` | Analyze arbitrary transactions, optional baseline, and telemetry; optionally correlate |
-| `GET` | `/api/platform/metrics` | Data-derived transaction, signal, account, value, confidence, and severity metrics |
-| `GET` | `/api/incidents` | List durable incident history |
-| `GET` | `/api/incidents/{id}` | Retrieve one incident |
-| `POST` | `/api/incidents/{id}/approve` | Execute that incident's approved simulated actions |
-| `GET` | `/api/audit?incident_id=...` | Retrieve persistent action history |
-| `GET` | `/api/detectors/status` | Report detector availability and provenance |
-| `POST` | `/api/signals/correlate` | Correlate caller-supplied contract-valid signals |
-| `GET` | `/api/demo/normal` | Return the canonical healthy presentation state |
-| `POST` | `/api/demo/simulate-attack` | Run the canonical integrated presentation path |
+With the core and graph services running, open a watcher terminal:
 
-Detector-specific additions:
+```powershell
+python scripts/watch_transactions.py --url ws://127.0.0.1:8000/ws/transactions
+```
 
-- Graph: `GET /baseline`, `POST /baseline/train`, `POST /analyze`, `POST /analyze-context` (atomic request-scoped baseline)
-- Infrastructure: `POST /analyze-events`, `POST /simulate`, `GET /signals/latest`
+Replay synthetic data in another terminal. Use a new run ID for each run:
 
-Interactive request schemas and examples are available in each service's `/docs` page. Detailed integration behavior is in [`docs/integration.md`](docs/integration.md).
+```powershell
+python scripts/replay_transactions.py --input data/generated/normal.json --run-id normal-demo-01 --interval 0.2
+python scripts/replay_transactions.py --input data/generated/mule.json --run-id mule-demo-01 --interval 0.2
+```
 
-## Runtime configuration
+See [script options](scripts/README.md) for generating new datasets. Synthetic
+scenario success does not establish real-world fraud detection accuracy.
 
-Copy [`.env.example`](.env.example) for local overrides.
+## Configuration
 
-| Variable | Default / values | Purpose |
-|---|---|---|
-| `ARGUS_DETECTOR_MODE` | `auto`, `fixture`, `required` | Choose visible fallback behavior or strict service integration |
-| `GRAPH_DETECTOR_URL` | `http://127.0.0.1:8001` | Graph service base URL |
-| `EBPF_DETECTOR_URL` | `http://127.0.0.1:8002` | Infrastructure service base URL |
-| `DETECTOR_TIMEOUT_SECONDS` | `2.5` | Per-service HTTP timeout |
-| `ARGUS_DB_PATH` | `data/argus.db` | Durable SQLite database path |
-| `ARGUS_EBPF_MODE` | `auto`, `replay`, `live` | Portable replay or strict Linux capture |
-| `ARGUS_GRAPH_BASELINE` | bundled healthy fixture | Initial graph baseline; Data Lab can retrain it at runtime |
-| `VITE_API_BASE_URL` | `http://127.0.0.1:8000` | Browser-facing ARGUS core URL |
+[.env.example](.env.example) lists supported settings. Compose reads the root
+`.env` for its explicitly mapped variables. For manual Python startup, export
+variables in the shell; the backend does not automatically load a `.env` file.
 
-`fixture` mode exists for an offline presentation. The UI labels it explicitly. Use `required` when proving real service integration because it returns an error instead of hiding a detector failure.
+| Setting | Default | Purpose |
+| --- | --- | --- |
+| `ARGUS_DETECTOR_MODE` | `auto` locally, `required` in Compose | Demo fallback policy; arbitrary batch/stream analysis still requires the graph service |
+| `GRAPH_DETECTOR_URL` / `EBPF_DETECTOR_URL` | localhost ports 8001 / 8002 | Core detector connections |
+| `DETECTOR_TIMEOUT_SECONDS` | `2.5` locally, `5` in Compose | Detector request timeout |
+| `ARGUS_DB_PATH` | `data/argus.db` locally | SQLite path; Compose uses its mounted runtime volume |
+| `FRAUD_ALERT_THRESHOLD` | `0.70` | Stream alert threshold on the 0–1 graph score |
+| `ANALYSIS_WINDOW_MINUTES` | `15` | Stream event-time window |
+| `ANALYSIS_MAX_TRANSACTIONS` | `100` | Maximum recent payments scored per stream window |
+| `ARGUS_GRAPH_BASELINE` | bundled normal transactions | Graph startup baseline path, set on the graph process |
+| `ARGUS_EBPF_MODE` | `auto` locally, `replay` in Compose | Infrastructure collection mode |
+| `VITE_API_BASE_URL` | `http://127.0.0.1:8000` | Frontend build/dev API URL |
 
-## Verification
+`auto` and `fixture` support the canonical demonstration and visibly label
+fallbacks. They do not provide substitute scoring for arbitrary caller data.
 
-Run every repository check:
+## Verify
 
 ```powershell
 python -m pytest -q
@@ -253,59 +217,43 @@ pnpm --dir frontend test
 pnpm --dir frontend build
 ```
 
-With both detector services running, also execute:
+With the full stack running and Python dependencies installed:
 
 ```powershell
 python -m backend.app.integration_check
+python scripts/check_integrated_stack.py
 ```
 
-Current verified baseline:
+The smoke test writes synthetic transactions/cases to the running stack. Use a
+demo database. CI runs unit tests, frontend tests/build, container builds, health
+checks and service smoke tests on pull requests and pushes to `main`. See the
+[verification report](docs/verification.md) for the checked revision, scope and
+known gaps. Passing tests do not mean every fintech requirement is implemented.
 
-- Python: **38 passed**, **1 skipped** (the privileged live-eBPF test is opt-in on Linux)
-- Frontend: **4 passed**
-- TypeScript and production Vite build: **passed**
-- Arbitrary transaction + baseline + telemetry API integration: **covered**
-- SQLite persistence and data-derived platform metrics: **covered**
+## Team and repository
 
-GitHub Actions repeats Python tests, frontend tests, and the production build on every pull request and push to `main`.
+| Contributor | Next responsibilities |
+| --- | --- |
+| Pratyush | Model evaluation, core risk integration, financial-only cases, RegTech |
+| Pratham | Graph analytics, mule networks, specialist evidence and graph validation |
+| Yojit | Live React dashboard, stream reliability, scam integration and demo flow |
 
-## Repository map
+Nitin contributed the existing infrastructure detector. Current fintech work is
+assigned to Pratyush, Pratham and Yojit.
 
 ```text
-backend/                      Orchestration, correlation, policy, persistence, API
-contracts/                    Shared JSON signal and entity contracts
-data/normal/                  Initial healthy reference data
-data/attack/                  Canonical safe replay fixtures
-docs/                         Architecture, integration, demo, release checklist
-frontend/                     React Financial SOC and editable Intelligence Lab
-services/graph-detector/      Adaptive graph and temporal financial analysis
-services/ebpf-detector/       Raw telemetry analysis plus safe replay/live capture
-docker-compose.yml            Health-checked four-service stack + persistent volume
-pytest.ini                    Integrated Python test discovery
+backend/                       Core API, persistence, correlation and approval
+services/graph-detector/       Graph rules, TGNN, specialist engine and demo
+services/ebpf-detector/        Infrastructure replay and guarded Linux collection
+frontend/                      React batch analysis and investigation dashboard
+contracts/                     Shared transaction and signal JSON schemas
+scripts/                       Synthetic generator, replay, watcher and smoke check
+data/                          Synthetic fixtures and local runtime database
+docs/                          Integration, verification, architecture and demo
+TODO.md                        Prioritized next work with acceptance criteria
 ```
 
-## Team ownership
-
-| Contributor | Primary ownership | Integrated result |
-|---|---|---|
-| Pratyush | ML evaluation, ARGUS core, integration, RegTech | Risk fusion, financial cases, compliance workflow, end-to-end integration |
-| Pratham | Graph intelligence and mule detection | Adaptive baseline, TGNN prototype, mule/scam scoring and explanations |
-| Yojit | Real-time processing, scam integration, React dashboard | Transaction simulator, durable ingestion and WebSocket stream; live React integration pending |
-
-The existing infrastructure detector was contributed by Nitin and remains integrated.
-
-The product value comes from the integration: neither detector alone declares a coordinated incident, and the UI never bypasses the core policy layer.
-
-## Safety, provenance, and honest limitations
-
-- Bundled data is synthetic; Data Lab inputs should also be non-sensitive.
-- SQLite provides strong hackathon/demo durability, not a production multi-region case store.
-- The rule weights are transparent and deterministic; they require validation and calibration on representative, legally usable data before real deployment.
-- Docker uses replay mode because live eBPF requires Linux, `bpftrace`, and elevated privileges.
-- The live collector observes the bundled harmless worker and does not read file contents or contact a suspicious IP.
-- Containment is simulated. Production use would require authenticated operators, fine-grained authorization, signed integrations, idempotency, rollback, and regulatory review.
-- This prototype demonstrates cross-domain reasoning and human governance; it does not claim to replace bank fraud, SIEM, or incident-response platforms.
-
-For guarded live Linux collection, read [`services/ebpf-detector/SETUP_LINUX.md`](services/ebpf-detector/SETUP_LINUX.md). Before a presentation, use [`docs/release-checklist.md`](docs/release-checklist.md) and [`docs/demo-script.md`](docs/demo-script.md).
-
-congrats you read the whole readme -Nitin
+This is a synthetic-data prototype. It has no production payment integration,
+operator authentication or role-based access control. Actions are simulated;
+there are no bank freezes or real transfer cancellations. Regulatory compliance,
+model accuracy, throughput and production readiness have not been established.

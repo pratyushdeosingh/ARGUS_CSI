@@ -34,7 +34,7 @@ SCAM_WEIGHTS = {
 class ScamScoreResult:
     """Detailed scam score result with component breakdowns and reasons."""
     account: str
-    scam_score: float  # Calibrated 0-100 score
+    scam_score: float  # Heuristic 0-100 score
     fan_out_score: float
     velocity_burst_score: float
     repeated_amounts_score: float

@@ -75,3 +75,14 @@ def test_prototype_model_alone_cannot_raise_normal_payment_risk(normal_transacti
     assert signal.risk_score <= 0.15
     assert signal.anomaly_type == "no_suspicious_activity"
     assert signal.suspicious_accounts == []
+
+
+def test_signal_identity_changes_with_payload_or_baseline(normal_transactions, attack_transactions):
+    detector = GraphDetector(normal_transactions)
+    original = detector.analyze(attack_transactions)
+    changed = list(attack_transactions)
+    changed[0] = changed[0].model_copy(update={"amount": changed[0].amount + 1})
+    assert detector.analyze(changed).signal_id != original.signal_id
+    baseline = list(normal_transactions)
+    baseline[0] = baseline[0].model_copy(update={"amount": baseline[0].amount + 1})
+    assert detector.analyze(attack_transactions, baseline).signal_id != original.signal_id
