@@ -202,3 +202,40 @@ class PlatformMetrics(StrictModel):
     value_by_currency: dict[str, float] = Field(default_factory=dict)
     average_confidence: float
     severity_counts: dict[str, int]
+
+
+class RiskBand(str, Enum):
+    LOW = "LOW"
+    MODERATE = "MODERATE"
+    HIGH = "HIGH"
+    SEVERE = "SEVERE"
+
+
+class Decision(str, Enum):
+    ALLOW = "ALLOW"
+    REVIEW = "REVIEW"
+    BLOCK = "BLOCK"
+
+
+class DetectorBreakdown(StrictModel):
+    rules: float = Field(ge=0, le=100, allow_inf_nan=False)
+    tgnn: float = Field(ge=0, le=100, allow_inf_nan=False)
+    mule: float = Field(ge=0, le=100, allow_inf_nan=False)
+    scam: float = Field(ge=0, le=100, allow_inf_nan=False)
+
+
+class TransactionScoreResponse(StrictModel):
+    transaction_id: str
+    sender: str
+    receiver: str
+    amount: float
+    currency: str
+    timestamp: datetime
+    risk_score: float = Field(ge=0, le=100, allow_inf_nan=False)
+    risk_band: RiskBand
+    decision: Decision
+    detectors: DetectorBreakdown
+    top_factors: list[str] = Field(default_factory=list)
+    reasons: list[str] = Field(default_factory=list)
+    explanation: str
+

@@ -148,3 +148,17 @@ Run `python -m pytest -q`, frontend tests/build, then the service smoke commands
 in the README. The full CI starts containers and tests real HTTP/WebSocket
 boundaries. The verification report documents coverage and unverified behaviour;
 [TODO.md](../TODO.md) tracks implementation work.
+
+## Supplementary scam stream (Yojit PR #4)
+
+Ingestion calls graph `/score-transaction-context` with the current payment and
+its selected session window. The route creates isolated specialist history,
+excludes future/other-currency context and returns zero risk for cancelled
+payments. The legacy shared-memory demo route is retained separately.
+
+Events are `transaction.scam_scored`, `scam_alert.created` and
+`transaction.scam_scoring_failed`. Raw scores are 0–100; normalized fields are
+0–1. `SCAM_ALERT_THRESHOLD` is 70/100 by default. Responses are checked against
+the submitted payment and finite score bounds. Fixture mode cannot fabricate
+specialist results. These events do not establish scam intent or execute bank
+controls; broad false-positive limitations remain documented in tests.

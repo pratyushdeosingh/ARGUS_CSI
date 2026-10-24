@@ -24,6 +24,7 @@ from scenarios import get_all_scenarios
 from scam_detector import ScamDetector
 from financial import assess_financial
 from contracts.financial_models import FinancialAssessment
+from contextual_scoring import ContextScoreRequest, score_context
 from visualization import to_cytoscape
 
 
@@ -128,6 +129,14 @@ def visualize(batch: TransactionBatch) -> VisualizationResponse:
 def score_transaction(payload: TransactionScoreInput) -> TransactionScoreResponse:
     """Real-time transaction scoring combining Rules, TGNN, Mule, and Scam detectors."""
     return risk_engine.score_transaction(payload)
+
+
+@app.post("/score-transaction-context", response_model=TransactionScoreResponse)
+def score_transaction_context(payload: ContextScoreRequest) -> TransactionScoreResponse:
+    try:
+        return score_context(detector, payload)
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
 
 
 @app.post("/api/history/reset")

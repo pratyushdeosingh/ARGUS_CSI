@@ -11,6 +11,7 @@ class Settings:
     ebpf_detector_url: str
     detector_timeout_seconds: float
     fraud_alert_threshold: float = 0.70
+    scam_alert_threshold: float = 70.0
     analysis_window_minutes: int = 15
     analysis_max_transactions: int = 100
 
@@ -25,10 +26,13 @@ class Settings:
         if timeout <= 0:
             raise ValueError("DETECTOR_TIMEOUT_SECONDS must be greater than zero")
         threshold = float(os.getenv("FRAUD_ALERT_THRESHOLD", "0.70"))
+        scam_threshold = float(os.getenv("SCAM_ALERT_THRESHOLD", "70.0"))
         window_minutes = int(os.getenv("ANALYSIS_WINDOW_MINUTES", "15"))
         max_transactions = int(os.getenv("ANALYSIS_MAX_TRANSACTIONS", "100"))
         if not 0 <= threshold <= 1:
             raise ValueError("FRAUD_ALERT_THRESHOLD must be between zero and one")
+        if not 0 <= scam_threshold <= 100:
+            raise ValueError("SCAM_ALERT_THRESHOLD must be between zero and 100")
         if window_minutes <= 0:
             raise ValueError("ANALYSIS_WINDOW_MINUTES must be positive")
         if not 1 <= max_transactions <= 5000:
@@ -43,6 +47,7 @@ class Settings:
             ).rstrip("/"),
             detector_timeout_seconds=timeout,
             fraud_alert_threshold=threshold,
+            scam_alert_threshold=scam_threshold,
             analysis_window_minutes=window_minutes,
             analysis_max_transactions=max_transactions,
         )
