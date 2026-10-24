@@ -63,6 +63,10 @@ def mock_gateway(mock_graph_detector: GraphDetector):
             txs = [GraphTx.model_validate(x) for x in body]
             signal = mock_graph_detector.analyze(txs)
             return httpx.Response(200, json=signal.model_dump(mode="json"))
+        if request.url.path == "/score-transaction-context":
+            from contextual_scoring import ContextScoreRequest, score_context
+            result = score_context(mock_graph_detector, ContextScoreRequest.model_validate(json.loads(request.content)))
+            return httpx.Response(200, json=result.model_dump(mode="json"))
         if request.url.path == "/score-transaction":
             body = json.loads(request.content)
             tx = GraphTx.model_validate(body)

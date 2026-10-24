@@ -63,6 +63,10 @@ def mock_gateway(mock_graph_detector: GraphDetector) -> DetectorGateway:
             txs = [GraphTx.model_validate(x) for x in body]
             signal = mock_graph_detector.analyze(txs)
             return httpx.Response(200, json=signal.model_dump(mode="json"))
+        if request.url.path == "/score-transaction-context":
+            from contextual_scoring import ContextScoreRequest, score_context
+            result = score_context(mock_graph_detector, ContextScoreRequest.model_validate(json.loads(request.content)))
+            return httpx.Response(200, json=result.model_dump(mode="json"))
         if request.url.path == "/score-transaction":
             body = json.loads(request.content)
             tx = GraphTx.model_validate(body)
@@ -173,7 +177,7 @@ def test_scam_alert_emission_on_threshold_exceeded(client: TestClient) -> None:
         # Send 3 setup transfers to 3 different counterparties (scam_score remains < 70)
         for i in range(1, 4):
             p = _make_payload(f"TX-SCAM-SET-{i}", account, f"PAYEE-{i}", amount=1200.0, minutes_offset=i)
-            client.post("/api/transactions", json=p)
+            client.post("/api/transactions?session_id=scam-fanout", json=p)
             # Drain events for setup transactions (fan-out < 4, scam_score < 70)
             assert ws.receive_json()["event_type"] == "transaction.received"
             assert ws.receive_json()["event_type"] == "transaction.scored"
@@ -181,7 +185,7 @@ def test_scam_alert_emission_on_threshold_exceeded(client: TestClient) -> None:
 
         # 4th transfer triggers fan_out >= 4 and velocity >= 4 (scam_score boosted to >= 85.0)
         eval_payload = _make_payload("TX-SCAM-TRIGGER", account, "PAYEE-4", amount=1200.0, minutes_offset=4)
-        res = client.post("/api/transactions", json=eval_payload)
+        res = client.post("/api/transactions?session_id=scam-fanout", json=eval_payload)
         assert res.status_code == 201
 
         assert ws.receive_json()["event_type"] == "transaction.received"
@@ -245,7 +249,7 @@ def test_scam_detector_failure_resilience(isolated_store: ArgusStore, isolated_m
                 "related_ips": [],
                 "reasons": ["Normal activity"],
             })
-        if request.url.path == "/score-transaction":
+        if request.url.path in {"/score-transaction", "/score-transaction-context"}:
             return httpx.Response(500, json={"detail": "Internal detector error"})
         return httpx.Response(404)
 

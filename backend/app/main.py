@@ -293,7 +293,14 @@ async def ingest_transaction(
 
     # 5. Specialist scam and risk scoring
     try:
-        score_resp = await gateway.score_transaction(transaction)
+        scam_context = await asyncio.to_thread(
+            store.get_recent_transactions_window,
+            end_timestamp=transaction.timestamp,
+            window_minutes=settings.analysis_window_minutes,
+            max_count=settings.analysis_max_transactions,
+            batch_id=effective_batch,
+        )
+        score_resp = await gateway.score_transaction(transaction, history_transactions=scam_context)
         raw_scam_score = score_resp.detectors.scam
         normalized_scam_score = round(raw_scam_score / 100.0, 3)
         raw_risk_score = score_resp.risk_score

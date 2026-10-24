@@ -89,35 +89,28 @@ class DetectorGateway:
             return graph
 
     async def score_transaction(
-        self, transaction: Transaction
+        self, transaction: Transaction, history_transactions: list[Transaction] | None = None
     ) -> TransactionScoreResponse:
-        """Score a single transaction against specialist models via /score-transaction."""
+        """Use a request-scoped context for ingested payments; never invent a score."""
         if self.settings.detector_mode == "fixture":
-            return TransactionScoreResponse(
-                transaction_id=transaction.transaction_id,
-                sender=transaction.source_account,
-                receiver=transaction.destination_account,
-                amount=transaction.amount,
-                currency=transaction.currency,
-                timestamp=transaction.timestamp,
-                risk_score=0.0,
-                risk_band=RiskBand.LOW,
-                decision=Decision.ALLOW,
-                detectors=DetectorBreakdown(rules=0.0, tgnn=0.0, mule=0.0, scam=0.0),
-                top_factors=["Scam Detector (0/100)"],
-                reasons=["Fixture-only mode is configured."],
-                explanation="Fixture evaluation for transaction.",
-            )
-
+            raise DetectorUnavailable("Specialist scoring requires the graph service; fixture mode cannot score caller payments.")
+        endpoint = "/score-transaction-context" if history_transactions is not None else "/score-transaction"
+        payload = transaction.model_dump(mode="json")
+        if history_transactions is not None:
+            payload = {"transaction": payload,
+                       "history": [tx.model_dump(mode="json") for tx in history_transactions]}
         timeout = httpx.Timeout(self.settings.detector_timeout_seconds)
         async with httpx.AsyncClient(timeout=timeout, transport=self.transport) as client:
             try:
-                response = await client.post(
-                    f"{self.settings.graph_detector_url}/score-transaction",
-                    json=transaction.model_dump(mode="json"),
-                )
+                response = await client.post(f"{self.settings.graph_detector_url}{endpoint}", json=payload)
                 response.raise_for_status()
-                return TransactionScoreResponse.model_validate(response.json())
+                result = TransactionScoreResponse.model_validate(response.json())
+                expected = (transaction.transaction_id, transaction.source_account,
+                            transaction.destination_account, transaction.amount, transaction.currency, transaction.timestamp)
+                actual = (result.transaction_id, result.sender, result.receiver, result.amount, result.currency, result.timestamp)
+                if actual != expected:
+                    raise ValueError("Specialist response does not match the submitted payment")
+                return result
             except Exception as error:
                 raise DetectorUnavailable(
                     f"Scam detector could not score this transaction: {self._error_detail(error)}"

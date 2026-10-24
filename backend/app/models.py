@@ -199,10 +199,10 @@ class Decision(str, Enum):
 
 
 class DetectorBreakdown(StrictModel):
-    rules: float
-    tgnn: float
-    mule: float
-    scam: float
+    rules: float = Field(ge=0, le=100, allow_inf_nan=False)
+    tgnn: float = Field(ge=0, le=100, allow_inf_nan=False)
+    mule: float = Field(ge=0, le=100, allow_inf_nan=False)
+    scam: float = Field(ge=0, le=100, allow_inf_nan=False)
 
 
 class TransactionScoreResponse(StrictModel):
@@ -212,7 +212,7 @@ class TransactionScoreResponse(StrictModel):
     amount: float
     currency: str
     timestamp: datetime
-    risk_score: float
+    risk_score: float = Field(ge=0, le=100, allow_inf_nan=False)
     risk_band: RiskBand
     decision: Decision
     detectors: DetectorBreakdown

@@ -66,6 +66,21 @@ A scoring failure does not undo ingestion. Alerts are transient WebSocket events
 there is no durable replay of missed alerts or automatic rescore on duplicate
 payment delivery. Watcher and replay scripts are provided below.
 
+### Supplementary scam stream
+
+Ingestion also emits `transaction.scam_scored`, `scam_alert.created`, or
+`transaction.scam_scoring_failed`. Raw specialist scores use 0–100 and explicitly
+named normalized fields use 0–1. `SCAM_ALERT_THRESHOLD` defaults to 70/100.
+Specialist scoring receives only the selected stream session's bounded history;
+it does not accumulate unrelated callers in the shared demo engine. Fixture
+mode reports scoring unavailable rather than inventing a clean/ALLOW result.
+The standalone `/score-transaction` demo retains its separate in-memory history.
+
+These supplementary events are not persisted fraud cases or regulatory decisions.
+Scam heuristics can still flag legitimate payroll, settlements, refunds or sparse
+history; the new validation suite explicitly characterizes those limitations.
+Real-data accuracy and live React integration remain pending.
+
 ### Specialist scoring
 
 The graph service exposes `POST /score-transaction` and a standalone `/demo`.
