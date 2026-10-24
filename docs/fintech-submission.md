@@ -36,7 +36,7 @@ isolated history so demonstrations do not reset live scoring history.
 | --- | --- |
 | Core `POST /api/transactions` | Persists payment, scores rolling window through graph `/analyze`, broadcasts received/scored/high-risk alert or analysis failure |
 | Core `/ws/transactions` | Live event stream; watcher script is provided |
-| Graph `POST /analyze` and `/analyze-context` | Rules plus TGNN; existing 0–1 `GraphSignal` contract |
+| Graph `POST /analyze` and `/analyze-context` | Rules plus corroborated TGNN; existing 0–1 `GraphSignal` contract |
 | Graph `POST /score-transaction` | Rules, TGNN, mule and scam specialists; 0–100 score with ALLOW/REVIEW/BLOCK recommendation |
 | Graph `/demo` | Standalone scoring demonstration; independent of the React SOC |
 | Core `POST /api/analyze` | Existing batch workflow; durable incident still requires a system signal |
@@ -61,6 +61,10 @@ dashboard already displays the live stream or specialist detector breakdown.
 | Medium | Transaction-level ML attribution and model/data provenance in the UI | Pratyush |
 
 The bundled TGNN was trained on canonical synthetic normal/attack batches.
+Batch TGNN risk can increase the rule score only when independent rule risk
+is at least 0.40; the uncalibrated model cannot independently trigger a batch
+alert. Specialist `/score-transaction` retains experimental model fusion and
+needs independent calibration before being promoted to core payment policy.
 Scenario assertions demonstrate behavior, not generalization or production fraud
 accuracy. Detector scores and node rankings are not SHAP explanations. Preserve
 these limits in the submission and demo until independent evaluation exists.

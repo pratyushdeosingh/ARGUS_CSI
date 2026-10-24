@@ -25,7 +25,8 @@ currencies, revisit an account, move backward in time, or report a shorter
 subpath when a longer path explains the same flow. Feature contributions use
 fixed documented weights in `detector.py`, with a small corroboration bonus for
 three or more independent findings. Batch scoring also evaluates the bundled
-TGNN checkpoint and uses the maximum of rule and model risk. The checkpoint is
+TGNN checkpoint and uses the maximum of rule and model risk only when
+independent rule risk is at least 0.40; otherwise it retains the rule score. The checkpoint is
 a synthetic-fixture prototype, not a validated production classifier. Startup
 fails clearly if it is missing; inference does not train or write model weights.
 

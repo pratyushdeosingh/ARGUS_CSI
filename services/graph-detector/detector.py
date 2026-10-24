@@ -100,10 +100,14 @@ class GraphDetector:
             tgnn_score_tensor, node_scores = self.tgnn(transactions)
             tgnn_score = round(float(tgnn_score_tensor.item()), 3)
 
-        combined_score = max(rule_score, tgnn_score)
+        # This checkpoint was trained on two synthetic fixtures, not calibrated
+        # on held-out payments. Require independent suspicious rule evidence
+        # before it can promote a batch into a high-risk model-driven alert.
+        model_corroborated = rule_score >= 0.40
+        combined_score = max(rule_score, tgnn_score) if model_corroborated else rule_score
 
         # Add GNN risk explanation and suspicious node tracking
-        if tgnn_score >= 0.25:
+        if tgnn_score >= 0.25 and model_corroborated:
             if node_scores:
                 suspicious_node = max(node_scores, key=node_scores.get)
                 node_val = node_scores[suspicious_node]
@@ -129,7 +133,7 @@ class GraphDetector:
             signal_id=_signal_id(transactions),
             timestamp=timestamp,
             risk_score=combined_score,
-            anomaly_type=_anomaly_type(evidence, combined_score, tgnn_score),
+            anomaly_type=_anomaly_type(evidence, combined_score, tgnn_score if model_corroborated else 0.0),
             suspicious_accounts=sorted(evidence.accounts),
             suspicious_transactions=sorted(evidence.transactions),
             related_ips=sorted(evidence.ips),

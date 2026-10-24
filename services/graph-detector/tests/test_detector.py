@@ -62,3 +62,16 @@ def test_empty_batch_returns_valid_low_risk_signal(normal_transactions):
     assert signal.risk_score == 0
     assert signal.anomaly_type == "no_suspicious_activity"
     assert signal.signal_id == "GRAPH-E3B0C44298FC"
+
+
+def test_prototype_model_alone_cannot_raise_normal_payment_risk(normal_transactions, monkeypatch):
+    import torch
+
+    detector = GraphDetector(normal_transactions)
+    monkeypatch.setattr(detector.tgnn, "forward", lambda txs: (
+        torch.tensor(0.999), {normal_transactions[0].source_account: 0.999}
+    ))
+    signal = detector.analyze(normal_transactions)
+    assert signal.risk_score <= 0.15
+    assert signal.anomaly_type == "no_suspicious_activity"
+    assert signal.suspicious_accounts == []
