@@ -7,14 +7,12 @@ import {
   ChevronRight,
   CircleHelp,
   FlaskConical,
-  LayoutDashboard,
   Network,
   Pause,
   Play,
   RefreshCw,
   Search,
   Shield,
-  SlidersHorizontal,
   Wallet,
 } from "lucide-react";
 import CanonicalDemo from "./CanonicalDemo";
@@ -45,6 +43,7 @@ import {
 } from "./simulation";
 import { useMonitoring } from "./useMonitoring";
 import { MoneyGraph } from "./MoneyGraph";
+import { NavigationShell, type Page } from "./NavigationShell";
 import { KpiTrend } from "./KpiTrend";
 import { runTrends, investigationTrend } from "./kpiTrends";
 import type {
@@ -55,13 +54,6 @@ import type {
 } from "./types";
 export { detectorSourceLabel } from "./CanonicalDemo";
 
-type Page =
-  | "Overview"
-  | "Transactions"
-  | "Alerts"
-  | "Investigations"
-  | "Demo"
-  | "Lab";
 const currency = (value: number) =>
   new Intl.NumberFormat("en-IN", {
     style: "currency",
@@ -144,6 +136,11 @@ export default function App() {
   const [canonical, setCanonical] = useState(false);
   const [labOpen, setLabOpen] = useState(false);
   const [caseBusy, setCaseBusy] = useState(false);
+  const navigate = useCallback((destination: Page) => {
+    setPage(destination);
+    setCanonical(false);
+    if (destination === "Lab") setLabOpen(true);
+  }, []);
   const complete = useCallback(() => setRunning(false), []);
   const { state, connection, error, cursor, records } = useMonitoring(
     config,
@@ -776,82 +773,16 @@ export default function App() {
   );
   return (
     <div className="m-app">
-      <aside className="m-sidebar">
-        <div className="m-brand">
-          <span>
-            <Shield size={22} />
-          </span>
-          <strong>
-            ARGUS<small>FINANCIAL INTELLIGENCE</small>
-          </strong>
-        </div>
-        <span className="m-nav-label">WORKSPACE</span>
-        <nav>
-          {(
-            [
-              ["Overview", LayoutDashboard],
-              ["Transactions", Wallet],
-              ["Alerts", Bell],
-              ["Investigations", Network],
-              ["Demo", SlidersHorizontal],
-              ["Lab", FlaskConical],
-            ] as const
-          ).map(([name, Icon]) => (
-            <button
-              key={name}
-              className={page === name ? "active" : ""}
-              onClick={() => {
-                setPage(name);
-                setCanonical(false);
-                if (name === "Lab") setLabOpen(true);
-              }}
-            >
-              <Icon size={17} />
-              {name}
-              {name === "Alerts" && alerts.length > 0 && (
-                <span>{alerts.length}</span>
-              )}
-            </button>
-          ))}
-        </nav>
-        <div className="m-sidebar-bottom">
-          <span className="m-synthetic">
-            <i /> Synthetic environment
-          </span>
-          <p>
-            Generated payments.
-            <br />
-            Actual detector outputs.
-          </p>
-          <div className="m-analyst">
-            <span>AN</span>
-            <div>
-              Analyst workspace<small>Local demonstration</small>
-            </div>
-          </div>
-        </div>
-      </aside>
+      <a className="m-skip-link" href="#main-content">Skip to main content</a>
       <div className="m-workspace">
-        <header className="m-header">
-          <div>
-            <span>Workspace</span>
-            <ChevronRight size={13} />
-            <strong>{page}</strong>
-          </div>
-          <div>
-            <span
-              className={`m-connection ${connection === "Connected" ? "healthy" : "warning"}`}
-            >
-              <i />
-              {connection}
-            </span>
-            <button onClick={refresh} aria-label="Refresh detector health">
-              <RefreshCw size={15} />
-            </button>
-            <span className="m-avatar">AN</span>
-          </div>
-        </header>
-        <main className="m-main">
+        <NavigationShell
+          page={page}
+          alertCount={alerts.length}
+          connection={connection}
+          onNavigate={navigate}
+          onRefresh={refresh}
+        />
+        <main className="m-main" id="main-content" tabIndex={-1}>
           <section className="m-heading">
             <div>
               <span className="m-eyebrow">ARGUS CSI / MONITORING</span>
@@ -893,8 +824,8 @@ export default function App() {
               <button onClick={returnToRun}>Return to live run</button>
             </div>
           )}
-          <section className="m-controls">
-            <div>
+          <section className="m-controls" aria-label="Simulation controls">
+            <div className="m-run-summary">
               <span className={`m-status ${running ? "completed" : "pending"}`}>
                 {running
                   ? "Running"
@@ -909,7 +840,7 @@ export default function App() {
                 Seed {config.seed} · {cursor}/{config.count} submitted
               </span>
             </div>
-            <div>
+            <div className="m-run-actions">
               <select
                 aria-label="Simulation speed"
                 value={speed}

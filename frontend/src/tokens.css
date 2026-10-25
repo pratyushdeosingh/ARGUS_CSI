@@ -1,0 +1,110 @@
+/* Inter by the Inter Project Authors; SIL OFL 1.1, see assets/fonts/OFL.txt. */
+@font-face {
+  font-family: Inter;
+  src: url("./assets/fonts/InterVariable.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+}
+
+/* Semantic foundation. Legacy aliases live in styles.css until later screen passes. */
+.m-app {
+  --color-app: #111214;
+  --surface-data: #191b1e;
+  --surface-matte: #1d1f22;
+  --surface-raised: #272a2e;
+  --surface-control: #202327;
+  --surface-glass: rgb(32 35 39 / 92%);
+  --surface-overlay: #26292d;
+  --border-subtle: #393d42;
+  --border-control: #666c73;
+  --edge-silver: rgb(255 255 255 / 14%);
+  --shadow-raised: 0 3px 10px rgb(0 0 0 / 10%);
+  --shadow-floating: 0 8px 24px rgb(0 0 0 / 24%);
+  --text-primary: #f2f1ee;
+  --text-secondary: #b8b8bb;
+  --text-muted: #a1a3a9;
+  --status-danger: #ce9189;
+  --status-warning: #c4ad7b;
+  --status-healthy: #8eac9c;
+  --state-selected: #41464d;
+  --state-hover: #34383e;
+  --focus-ring: #d3c59e;
+  --radius-sm: 5px;
+  --radius-control: 8px;
+  --radius-panel: 12px;
+  --radius-floating: 15px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --font-sans: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, "SFMono-Regular", Consolas, monospace;
+  --type-metadata: 11px;
+  --type-label: 12px;
+  --type-body: 13px;
+  --type-section: 15px;
+  --type-page: 24px;
+  --type-value: 28px;
+  --motion-fast: 100ms;
+  --motion-standard: 140ms;
+  --ease-out: cubic-bezier(.2, .8, .2, 1);
+  --control-blur: 10px;
+  color-scheme: dark;
+}
+
+.m-material-0 { background: var(--surface-data); }
+.m-material-1 { background: var(--surface-matte); box-shadow: var(--shadow-raised); }
+.m-material-2 { background: var(--surface-control); box-shadow: inset 0 1px var(--edge-silver), var(--shadow-floating); }
+.m-material-3 { background: var(--surface-overlay); box-shadow: inset 0 1px var(--edge-silver), var(--shadow-floating); }
+
+/* Only the bounded primary bar samples its backdrop. Data and popups stay opaque. */
+@supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .m-material-2 {
+    background: var(--surface-glass);
+    -webkit-backdrop-filter: blur(var(--control-blur));
+    backdrop-filter: blur(var(--control-blur));
+  }
+}
+.m-material-2[data-opaque="true"] {
+  background: var(--surface-control);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+@media (prefers-reduced-transparency: reduce) {
+  .m-app .m-material-2, .m-app .lab-backdrop, .m-app .topbar {
+    background: var(--surface-control);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .m-app { --motion-fast: 0ms; --motion-standard: 0ms; }
+}
+@media (forced-colors: active) {
+  .m-app {
+    --color-app: Canvas;
+    --surface-data: Canvas;
+    --surface-matte: Canvas;
+    --surface-raised: ButtonFace;
+    --surface-control: Canvas;
+    --surface-glass: Canvas;
+    --surface-overlay: Canvas;
+    --text-primary: CanvasText;
+    --text-secondary: CanvasText;
+    --text-muted: CanvasText;
+    --border-subtle: ButtonText;
+    --border-control: ButtonText;
+    --state-selected: Highlight;
+    --state-hover: ButtonFace;
+    --focus-ring: Highlight;
+  }
+  .m-app .m-material-2, .m-app .m-material-3 {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    box-shadow: none;
+  }
+  .m-app nav button[aria-current="page"] { border-color: Highlight; outline: 1px solid Highlight; }
+}

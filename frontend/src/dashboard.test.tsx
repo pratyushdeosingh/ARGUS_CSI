@@ -13,6 +13,7 @@ import {
 import type { RunConfig } from "./simulation";
 import type { StreamEvent } from "./monitoring";
 const mocks = vi.hoisted(() => ({
+  subscriptions: vi.fn(),
   receive: undefined as undefined | ((event: StreamEvent) => void),
   recover: undefined as undefined | (() => Promise<void>),
 }));
@@ -23,6 +24,7 @@ vi.mock("./stream", () => ({
     status: (s: string) => void,
     recover: () => Promise<void>,
   ) => {
+    mocks.subscriptions();
     mocks.receive = receive;
     mocks.recover = recover;
     status("Connected");
@@ -70,6 +72,7 @@ let container: HTMLDivElement;
 let root: Root;
 beforeEach(() => {
   vi.useFakeTimers();
+  mocks.subscriptions.mockClear();
   (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
   container = document.createElement("div");
   document.body.append(container);
@@ -562,5 +565,37 @@ describe("contribution chart scenario isolation", () => {
     expect(firstCard().querySelector("strong")?.textContent).toBe("1");
     expect(firstCard().querySelectorAll(".m-contribution-bucket")).toHaveLength(1);
     expect(firstCard().textContent).toContain("Not enough history");
+  });
+});
+
+describe("shell ownership", () => {
+  it("keeps one monitoring owner across all destinations and cosmetic menu interactions", async () => {
+    await act(async () => root.render(<StrictMode><App /></StrictMode>));
+    // StrictMode may probe initial effects; navigation must add no subscriptions.
+    const subscriptions = mocks.subscriptions.mock.calls.length;
+    const recoveries = vi.mocked(syntheticSource.history).mock.calls.length;
+    for (const page of ["Transactions", "Alerts", "Investigations", "Demo", "Lab", "Overview"]) {
+      await nav(page);
+      if (page === "Lab") await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Close intelligence lab"]')!.click());
+    }
+    expect(syntheticSource.ingest).not.toHaveBeenCalled();
+    expect(mocks.subscriptions).toHaveBeenCalledTimes(subscriptions);
+    expect(syntheticSource.history).toHaveBeenCalledTimes(recoveries);
+    await click(" Start simulation");
+    await click(" Pause");
+    const graph = container.querySelector('[data-testid="graph"]');
+    const selected = graph?.getAttribute("data-selected");
+    const toggle = container.querySelector<HTMLButtonElement>('[aria-expanded]')!;
+    await act(async () => toggle.click());
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Reduce transparency"]')!.click());
+    await act(async () => document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+    expect(container.querySelector('[data-testid="graph"]')).toBe(graph);
+    expect(graph?.getAttribute("data-selected")).toBe(selected);
+    const session = vi.mocked(syntheticSource.ingest).mock.calls[0][1];
+    await nav("Demo"); await nav("Overview");
+    await click(" Resume");
+    expect(vi.mocked(syntheticSource.ingest).mock.calls[1][1]).toBe(session);
+    expect(mocks.subscriptions).toHaveBeenCalledTimes(subscriptions);
+    expect(syntheticSource.history).toHaveBeenCalledTimes(recoveries);
   });
 });
