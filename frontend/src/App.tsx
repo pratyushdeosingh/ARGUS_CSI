@@ -45,6 +45,8 @@ import {
 } from "./simulation";
 import { useMonitoring } from "./useMonitoring";
 import { MoneyGraph } from "./MoneyGraph";
+import { KpiTrend } from "./KpiTrend";
+import { runTrends, investigationTrend } from "./kpiTrends";
 import type {
   AuditEvent,
   DetectorStatus,
@@ -169,6 +171,8 @@ export default function App() {
     () => Object.values(state.transactions),
     [state.transactions],
   );
+  const activityTrends = useMemo(() => runTrends(state), [state.transactions, state.detections, state.alerts]);
+  const caseTrend = useMemo(() => investigationTrend(financialCases, Date.now(), Boolean(caseError)), [financialCases, caseError]);
   const displayedState = inspection ?? state;
   const transactions = useMemo(
     () =>
@@ -1230,15 +1234,16 @@ export default function App() {
                       : "Health unavailable",
                     Activity,
                   ],
-                ].map(([label, value, caption, Icon]) => {
+                ].map(([label, value, caption, Icon], index) => {
                   const Glyph = Icon as typeof Wallet;
                   return (
-                    <article className="m-panel" key={String(label)}>
+                    <article className={`m-panel${index < 4 ? " m-kpi-enhanced" : ""}`} key={String(label)}>
                       <div>
                         <span>{String(label)}</span>
                         <Glyph size={16} />
                       </div>
                       <strong>{String(value)}</strong>
+                      {index < 4 && <KpiTrend trend={index === 3 ? caseTrend : activityTrends[index]} tone={index === 0 ? "volume" : index === 1 ? "danger" : "warning"} />}
                       <small>{String(caption)}</small>
                     </article>
                   );

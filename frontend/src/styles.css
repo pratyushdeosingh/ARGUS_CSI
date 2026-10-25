@@ -1153,3 +1153,20 @@
 .m-app .lab-modal .result-score-grid { gap: 8px; }
 .m-app .lab-modal .lab-content { grid-template-columns: minmax(0, 1.5fr) minmax(260px, 1fr); }
 @media(max-width:900px){ .m-app .lab-modal .lab-content { grid-template-columns: 1fr; } }
+
+/* KPI-only trend treatment; preserve the existing five-card grid. */
+.m-kpis .m-kpi-enhanced { position: relative; overflow: hidden; }
+.m-kpis .m-kpi-enhanced > strong { max-width: 60%; }
+.m-kpis article > .m-kpi-trend { display: block; font-size: inherit; }
+.m-kpis .m-contribution-chart { position: absolute; right: 12px; top: 42px; width: 36%; max-width: 100px; height: 48px; color: var(--kpi-color); }
+.m-kpis .m-contribution-placeholder { color: #686e6a; }
+.m-kpi-volume { --kpi-color: #8eac9c; }
+.m-kpi-danger { --kpi-color: #ce9189; }
+.m-kpi-warning { --kpi-color: #c4ad7b; }
+.m-kpis .m-kpi-trend small { position: relative; margin-bottom: 4px; }
+.m-kpis .m-kpi-change { font-size: 10px; }
+.m-kpis .m-kpi-up { color: var(--kpi-color); }
+.m-kpis .m-kpi-volume .m-kpi-up { color: #a7aaab; }
+.m-kpis .m-kpi-down { color: #8eac9c; }
+.m-kpis .m-kpi-volume .m-kpi-down { color: #a7aaab; }
+.m-kpis .m-kpi-neutral { color: #a7aaab; }

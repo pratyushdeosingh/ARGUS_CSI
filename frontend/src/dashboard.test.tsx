@@ -496,3 +496,71 @@ describe("alert recovery and financial investigations", () => {
     expect(syntheticSource.ingest).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("live KPI trends", () => {
+  it("keeps Ready empty, updates on accepted payments/results, freezes on pause and clears run trends on reset", async () => {
+    await act(async () => root.render(<App />));
+    const cards = () => container.querySelectorAll(".m-kpis article");
+    expect(cards()).toHaveLength(5);
+    for (const card of Array.from(cards()).slice(0, 4)) {
+      expect(card.querySelectorAll(".m-contribution-chart rect")).toHaveLength(12);
+    }
+    expect(container.querySelector(".m-activity-control, .m-activity-dialog")).toBeNull();
+    expect(cards()[0].textContent).toContain("Not enough history");
+    expect(cards()[0].querySelector(".m-contribution-bucket")).toBeNull();
+    expect(cards()[4].querySelector(".m-contribution-chart")).toBeNull();
+    expect(syntheticSource.ingest).not.toHaveBeenCalled();
+    await click(" Start simulation");
+    await click(" Pause");
+    const [tx, session] = vi.mocked(syntheticSource.ingest).mock.calls[0];
+    for (const [id, offset] of [["prior", 60000], ["latest", 120000]] as const) {
+      const timestamp = new Date(Date.parse(tx.timestamp) + offset).toISOString();
+      await emit({ event_id: id, event_type: "transaction.received", timestamp, session_id: session, data: { ...tx, transaction_id: id, timestamp } });
+      await emit({ event_id: `${id}-score`, event_type: "transaction.scam_scored", timestamp, session_id: session, data: { transaction_id: id, scam_score: 90 } });
+      await emit({ event_id: `${id}-alert`, event_type: "alert.created", timestamp: "2030-01-01T00:00:00Z", session_id: session, data: { transaction_id: id, alert_id: id, severity: "high" } });
+    }
+    expect(cards()[0].querySelector("strong")?.textContent).toBe("3");
+    expect(cards()[0].querySelectorAll(".m-contribution-bucket")).toHaveLength(12);
+    expect(cards()[0].textContent).toContain("→ 0.0%");
+    expect(cards()[1].querySelector("strong")?.textContent).toBe("2");
+    expect(cards()[1].textContent).toContain("→ 0.0%");
+    expect(cards()[2].querySelector("strong")?.textContent).toBe("2");
+    expect(cards()[2].textContent).toContain("→ 0.0%");
+    const snapshot = container.querySelector(".m-kpis")?.innerHTML;
+    await act(async () => vi.advanceTimersByTimeAsync(5000));
+    expect(container.querySelector(".m-kpis")?.innerHTML).toBe(snapshot);
+    await click(" Reset");
+    expect(cards()[0].querySelector("strong")?.textContent).toBe("0");
+    expect(cards()[0].textContent).toContain("Not enough history");
+    expect(cards()[0].querySelector(".m-contribution-bucket")).toBeNull();
+    expect(container.querySelector(".m-controls")?.textContent).toContain("Ready");
+  });
+});
+
+
+describe("contribution chart scenario isolation", () => {
+  it("clears run buckets on a scenario switch and ignores the previous session", async () => {
+    await act(async () => root.render(<App />));
+    await click(" Start simulation");
+    await click(" Pause");
+    const [previousTx, previousSession] = vi.mocked(syntheticSource.ingest).mock.calls[0];
+    await nav("Demo");
+    const scenario = Array.from(container.querySelectorAll(".m-scenario")).find(article => article.textContent?.includes("Normal financial activity"));
+    const load = Array.from(scenario!.querySelectorAll("button")).find(button => button.textContent?.trim() === "Load scenario");
+    await act(async () => load!.click());
+    await nav("Overview");
+    const firstCard = () => container.querySelector(".m-kpis article")!;
+    expect(firstCard().querySelector("strong")?.textContent).toBe("0");
+    expect(firstCard().querySelectorAll(".m-contribution-bucket")).toHaveLength(0);
+    expect(firstCard().querySelectorAll(".m-contribution-placeholder")).toHaveLength(12);
+    expect(container.querySelector(".m-controls")?.textContent).toContain("Ready");
+    await click(" Start simulation");
+    await click(" Pause");
+    const nextCall = vi.mocked(syntheticSource.ingest).mock.calls.at(-1)!;
+    expect(nextCall[1]).not.toBe(previousSession);
+    await emit({ event_id: "stale-chart-event", session_id: previousSession, event_type: "transaction.received", timestamp: previousTx.timestamp, data: { ...previousTx } });
+    expect(firstCard().querySelector("strong")?.textContent).toBe("1");
+    expect(firstCard().querySelectorAll(".m-contribution-bucket")).toHaveLength(1);
+    expect(firstCard().textContent).toContain("Not enough history");
+  });
+});
