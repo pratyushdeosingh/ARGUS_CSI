@@ -162,6 +162,9 @@ function TransactionGraph({
       const { default: cytoscape } = await import("cytoscape");
       if (cancelled || !containerRef.current) return;
 
+      const theme = getComputedStyle(containerRef.current);
+      const danger = theme.getPropertyValue("--status-danger").trim();
+      const warning = theme.getPropertyValue("--status-warning").trim();
       graph = cytoscape({
         container: containerRef.current,
         elements,
@@ -175,23 +178,23 @@ function TransactionGraph({
             width: 58,
             height: 58,
             label: "data(label)",
-            color: "#d8e7e2",
+            color: "#ffffff",
             "font-size": 10,
             "font-family": "IBM Plex Mono, monospace",
             "font-weight": 600,
             "text-valign": "center",
             "text-halign": "center",
-            "background-color": "#142b27",
-            "border-color": "#2e7566",
+            "background-color": "#242424",
+            "border-color": "#888888",
             "border-width": 2,
           },
         },
         {
           selector: "node.suspicious",
           style: {
-            "background-color": "#321716",
-            "border-color": "#f06456",
-            color: "#ffd7d0",
+            "background-color": "#242424",
+            "border-color": warning,
+            color: warning,
             "border-width": 3,
           },
         },
@@ -203,10 +206,10 @@ function TransactionGraph({
             "target-arrow-shape": "triangle",
             "arrow-scale": 0.8,
             label: "data(label)",
-            color: "#809b94",
+            color: "#c4c4c4",
             "font-size": 9,
             "font-family": "IBM Plex Mono, monospace",
-            "text-background-color": "#0c1715",
+            "text-background-color": "#0d0d0d",
             "text-background-opacity": 1,
             "text-background-padding": "3px",
           },
@@ -214,15 +217,15 @@ function TransactionGraph({
         {
           selector: "edge.normal-edge",
           style: {
-            "line-color": "#2e7566",
-            "target-arrow-color": "#2e7566",
+            "line-color": "#777777",
+            "target-arrow-color": "#777777",
           },
         },
         {
           selector: "edge.attack-edge",
           style: {
-            "line-color": "#e04f43",
-            "target-arrow-color": "#e04f43",
+            "line-color": danger,
+            "target-arrow-color": danger,
             width: 3,
           },
         },

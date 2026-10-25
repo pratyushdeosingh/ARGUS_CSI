@@ -13,6 +13,10 @@
   --green: var(--status-healthy);
   --amber: var(--status-warning);
   --red: var(--status-danger);
+  --mint: var(--status-healthy);
+  --mint-dark: var(--status-healthy-soft);
+  --danger: var(--status-danger);
+  --danger-dark: var(--status-danger-soft);
   display: block;
   min-height: 100vh;
   background: var(--bg);
@@ -126,7 +130,7 @@
 .m-desktop-nav button > svg { display: none; }
 .m-app .m-desktop-nav button.active, .m-app .m-mobile-nav button.active { color: var(--text-primary); background: var(--state-selected); border-color: #6d747e; box-shadow: inset 0 1px var(--edge-silver), 0 2px 5px rgb(0 0 0 / 16%); }
 .m-app .m-desktop-nav button:hover:not(:disabled), .m-app .m-mobile-nav button:hover:not(:disabled) { background: var(--state-hover); }
-.m-nav-count { display: inline-flex; justify-content: center; align-items: center; min-width: 19px; padding: 2px 5px; border-radius: var(--radius-sm); font-size: var(--type-metadata); background: #493532; color: #edbbb2; }
+.m-nav-count { display: inline-flex; justify-content: center; align-items: center; min-width: 19px; padding: 2px 5px; border-radius: var(--radius-sm); font-size: var(--type-metadata); background: var(--status-danger-soft); color: var(--status-danger); }
 .m-header-actions { display: flex; align-items: center; gap: 4px; margin-left: auto; }
 .m-header .m-connection { display: flex; align-items: center; gap: 7px; white-space: nowrap; padding: 0 10px; font-size: var(--type-metadata); }
 .m-connection i, .m-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
@@ -260,16 +264,16 @@
   color: #b7b9b8;
 }
 .m-status.completed {
-  color: #acc1b0;
-  background: #28372d;
+  color: var(--status-healthy);
+  background: var(--status-healthy-soft);
 }
 .m-status.pending {
-  color: #caba90;
-  background: #3a3327;
+  color: var(--status-warning);
+  background: var(--status-warning-soft);
 }
 .m-status.cancelled {
-  color: #ceaaa4;
-  background: #3e2d2b;
+  color: var(--status-danger);
+  background: var(--status-danger-soft);
 }
 .m-panel {
   background: var(--card);
@@ -524,12 +528,12 @@
   flex: 0 0 6px;
   height: 6px;
   border-radius: 50%;
-  background: #c4ad7b;
+  background: var(--status-warning);
   margin-top: 4px;
 }
 .m-alert-dot.critical,
 .m-alert-dot.high {
-  background: #ba7c74;
+  background: var(--status-danger);
 }
 .m-app .m-alert.active {
   background: #2b302c;
@@ -696,7 +700,7 @@
 .m-scores b {
   display: block;
   height: 3px;
-  background: #aebba3;
+  background: var(--status-warning);
 }
 .m-details .m-score-note {
   font-size: 9px;
@@ -992,15 +996,15 @@
 .m-kpis .m-kpi-enhanced > strong { max-width: 60%; }
 .m-kpis article > .m-kpi-trend { display: block; font-size: inherit; }
 .m-kpis .m-contribution-chart { position: absolute; right: 12px; top: 42px; width: 36%; max-width: 100px; height: 48px; color: var(--kpi-color); }
-.m-kpis .m-contribution-placeholder { color: #686e6a; }
-.m-kpi-volume { --kpi-color: #8eac9c; }
-.m-kpi-danger { --kpi-color: #ce9189; }
-.m-kpi-warning { --kpi-color: #c4ad7b; }
+.m-kpis .m-contribution-placeholder { color: #686868; }
+.m-kpi-volume { --kpi-color: var(--status-healthy); }
+.m-kpi-danger { --kpi-color: var(--status-danger); }
+.m-kpi-warning { --kpi-color: var(--status-warning); }
 .m-kpis .m-kpi-trend small { position: relative; margin-bottom: 4px; }
 .m-kpis .m-kpi-change { font-size: var(--type-metadata); }
 .m-kpis .m-kpi-up { color: var(--kpi-color); }
 .m-kpis .m-kpi-volume .m-kpi-up { color: #a7aaab; }
-.m-kpis .m-kpi-down { color: #8eac9c; }
+.m-kpis .m-kpi-down { color: var(--status-healthy); }
 .m-kpis .m-kpi-volume .m-kpi-down { color: #a7aaab; }
 .m-kpis .m-kpi-neutral { color: #a7aaab; }
 

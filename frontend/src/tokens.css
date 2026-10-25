@@ -24,9 +24,16 @@
   --text-primary: #ffffff;
   --text-secondary: #c4c4c4;
   --text-muted: #aaaaaa;
-  --status-danger: #ce9189;
-  --status-warning: #c4ad7b;
-  --status-healthy: #8eac9c;
+  --status-danger: #FF5D69;
+  --status-warning: #FFC44D;
+  --status-healthy: #35E3A0;
+  /* Tint on a dark reading surface keeps small red labels readable on selection. */
+  --status-danger-soft: color-mix(in srgb, var(--status-danger) 12%, var(--surface-data));
+  --status-healthy-soft: color-mix(in srgb, var(--status-healthy) 12%, var(--surface-data));
+  --status-warning-soft: color-mix(in srgb, var(--status-warning) 12%, var(--surface-data));
+  --status-danger-border: color-mix(in srgb, var(--status-danger) 35%, transparent);
+  --status-healthy-border: color-mix(in srgb, var(--status-healthy) 35%, transparent);
+  --status-warning-border: color-mix(in srgb, var(--status-warning) 35%, transparent);
   --state-selected: #333333;
   --state-hover: #2a2a2a;
   --focus-ring: #e6e6e6;

@@ -1122,7 +1122,7 @@ export default function App() {
                 ].map(([label, value, caption, Icon], index) => {
                   const Glyph = Icon as typeof Wallet;
                   return (
-                    <article className={`m-panel${index < 4 ? " m-kpi-enhanced" : ""}`} key={String(label)}>
+                    <article className={`m-panel${index < 4 ? " m-kpi-enhanced" : ""}`} data-health={index === 4 && value === "2/2" ? "healthy" : undefined} key={String(label)}>
                       <div>
                         <span>{String(label)}</span>
                         <Glyph size={16} />

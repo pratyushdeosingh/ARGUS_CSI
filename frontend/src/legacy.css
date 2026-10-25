@@ -15,11 +15,11 @@
   --text: #ffffff;
   --muted: #b7b7b7;
   --faint: #a1a1a1;
-  --mint: #a5b9a8;
-  --mint-dark: #2c3730;
-  --danger: #c48b83;
-  --danger-dark: #3a2c2a;
-  --amber: #c4ad7b;
+  --mint: #35E3A0;
+  --mint-dark: var(--status-healthy-soft, #10271f);
+  --danger: #FF5D69;
+  --danger-dark: var(--status-danger-soft, #2a1718);
+  --amber: #FFC44D;
 }
 
 * {
@@ -244,7 +244,7 @@ footer i {
 }
 
 .source-pill.offline {
-  color: #ff9b90;
+  color: var(--danger);
   border-color: #67342f;
 }
 
@@ -253,7 +253,7 @@ footer i {
   align-items: flex-start;
   gap: 7px;
   padding: 7px 8px;
-  color: #e4b96f;
+  color: var(--amber);
   background: rgba(88, 61, 24, 0.22);
   border: 1px solid #514123;
   border-radius: 5px;
@@ -302,7 +302,7 @@ main {
 }
 
 .threat-orb.alert {
-  color: #ff8a7f;
+  color: var(--danger);
   background: var(--danger-dark);
   border-color: #73342e;
   animation: alert-pulse 1.4s ease-in-out infinite;
@@ -398,7 +398,7 @@ h3 {
 }
 
 .simulate-button:hover:not(:disabled) {
-  background: #6beabd;
+  background: var(--mint);
   transform: translateY(-1px);
 }
 
@@ -531,7 +531,7 @@ h3 {
 }
 
 .timeline-event.active:not(.normal-event) .timeline-dot {
-  color: #ff948a;
+  color: var(--danger);
   background: var(--danger-dark);
   border-color: #74332d;
 }
@@ -609,11 +609,11 @@ h3 {
 }
 
 .normal-node {
-  background: #2e7566;
+  background: #888888;
 }
 
 .risk-node {
-  background: var(--danger);
+  background: var(--amber);
 }
 
 .graph-canvas {
@@ -680,7 +680,7 @@ h3 {
 }
 
 .visible .icon-box {
-  color: #ff8d82;
+  color: var(--danger);
   background: #281615;
   border-color: #63302c;
 }
@@ -835,7 +835,7 @@ h3 {
   align-items: center;
   gap: 6px;
   padding: 5px 8px;
-  color: #ff9e94;
+  color: var(--danger);
   background: #2f1715;
   border: 1px solid #65302b;
   border-radius: 4px;
@@ -939,7 +939,7 @@ h3 {
 .action-icon {
   width: 25px;
   height: 25px;
-  color: #ff8e84;
+  color: var(--danger);
   background: #2b1715;
   border: 1px solid #59302b;
   border-radius: 5px;
@@ -983,7 +983,7 @@ h3 {
 }
 
 .approve-button:hover:not(:disabled) {
-  background: #ff7c70;
+  background: var(--danger);
 }
 
 .approve-button svg:last-child {
@@ -1215,7 +1215,7 @@ h3 {
   gap: 7px;
   margin-top: 12px;
   padding: 9px;
-  color: #ffaaa2;
+  color: var(--danger);
   background: var(--danger-dark);
   border: 1px solid #64332e;
   border-radius: 6px;

@@ -23,6 +23,8 @@ export const MoneyGraph = memo(function MoneyGraph({
     let observer: ResizeObserver;
     void import("cytoscape").then(({ default: cytoscape }) => {
       if (disposed || !container.current) return;
+      const theme = getComputedStyle(container.current);
+      const warning = theme.getPropertyValue("--status-warning").trim();
       graph.current = cytoscape({
         container: container.current,
         minZoom: 0.25,
@@ -35,10 +37,10 @@ export const MoneyGraph = memo(function MoneyGraph({
               label: "data(label)",
               width: 40,
               height: 40,
-              "background-color": "#303936",
-              "border-color": "#71867a",
+              "background-color": "#242424",
+              "border-color": "#888888",
               "border-width": 1,
-              color: "#c9cfcb",
+              color: "#e5e5e5",
               "font-size": 9,
               "text-valign": "bottom",
               "text-margin-y": 7,
@@ -46,11 +48,11 @@ export const MoneyGraph = memo(function MoneyGraph({
           },
           {
             selector: "node.risk",
-            style: { "border-color": "#c17c74", "background-color": "#4b3432" },
+            style: { "border-color": warning, "background-color": "#242424", color: warning },
           },
           {
             selector: "node.endpoint",
-            style: { "border-width": 3, "border-color": "#e3d8b5" },
+            style: { "border-width": 3, "border-color": "#ffffff" },
           },
           {
             selector: "edge",
@@ -59,11 +61,11 @@ export const MoneyGraph = memo(function MoneyGraph({
               width: 1.5,
               "curve-style": "bezier",
               "target-arrow-shape": "triangle",
-              "line-color": "#5d6560",
-              "target-arrow-color": "#5d6560",
-              color: "#a5aaa6",
+              "line-color": "#777777",
+              "target-arrow-color": "#777777",
+              color: "#c4c4c4",
               "font-size": 9,
-              "text-background-color": "#1b1d1f",
+              "text-background-color": "#0b0b0b",
               "text-background-opacity": 1,
               "text-background-padding": "3px",
             },
@@ -72,9 +74,9 @@ export const MoneyGraph = memo(function MoneyGraph({
             selector: "edge.selected",
             style: {
               width: 3,
-              "line-color": "#d3c59e",
-              "target-arrow-color": "#d3c59e",
-              color: "#f2e8cd",
+              "line-color": warning,
+              "target-arrow-color": warning,
+              color: warning,
             },
           },
           { selector: "edge.cancelled", style: { "line-style": "dashed" } },

@@ -8,7 +8,7 @@
 .m-app.m-experience .m-run-summary strong { color: var(--text-primary); }
 .m-app.m-experience .m-eyebrow { color: var(--text-secondary); }
 .m-app.m-experience .m-legend { color: var(--text-secondary); }
-.m-app.m-experience .m-legend i { background: #d6d6d6; }
+.m-app.m-experience .m-legend i { background: var(--status-warning); }
 .m-app.m-experience .m-related button strong { color: var(--text-primary); }
 .m-app.m-experience .m-kpi-neutral,
 .m-app.m-experience .m-kpi-volume .m-kpi-up,
@@ -82,7 +82,7 @@
 .m-app.m-experience .json-grid label:first-child textarea { min-height: 260px; }
 .m-app.m-experience .lab-modal .lab-run-button { min-height: 44px; font: 600 12px var(--font-sans); color: #080808; background: #f6f6f6; border: 1px solid #ffffff; margin-top: 20px; }
 .m-app.m-experience .lab-modal .lab-run-button:hover:not(:disabled) { color: #080808; background: #ffffff; }
-.m-app.m-experience .lab-error { font-size: 12px; line-height: 1.6; padding: 12px; color: #edb5ae; background: #2b1c1a; border-color: #79544f; }
+.m-app.m-experience .lab-error { font-size: 12px; line-height: 1.6; padding: 12px; color: var(--status-danger); background: var(--status-danger-soft); border-color: var(--status-danger-border); }
 .m-app.m-experience .lab-side-heading { font-size: 13px; color: var(--text-primary); border-color: var(--monitor-divider); gap: 10px; flex-wrap: wrap; }
 .m-app.m-experience .lab-side-heading small { color: var(--text-secondary); font: 11px var(--font-sans); }
 .m-app.m-experience .result-empty { min-height: 225px; color: var(--text-secondary); }
@@ -92,10 +92,10 @@
 .m-app.m-experience .result-score-grid > div { background: #141414; border-color: var(--monitor-divider); min-width: 0; padding: 12px; }
 .m-app.m-experience .result-score-grid span { font: 11px var(--font-sans); color: var(--text-secondary); }
 .m-app.m-experience .result-score-grid strong { font: 600 26px var(--font-sans); color: #ffffff; }
-.m-app.m-experience .result-verdict { background: #161616; border-color: #454545; border-left-color: var(--status-healthy); }
+.m-app.m-experience .result-verdict { background: #161616; border-color: #454545; border-left-color: var(--text-muted); }
 .m-app.m-experience .result-verdict.high,
-.m-app.m-experience .result-verdict.critical { background: #241818; border-color: #644541; border-left-color: var(--status-danger); }
-.m-app.m-experience .result-verdict > span { font: 11px var(--font-sans); color: var(--status-warning); }
+.m-app.m-experience .result-verdict.critical { background: var(--status-danger-soft); border-color: var(--status-danger-border); border-left-color: var(--status-danger); }
+.m-app.m-experience .result-verdict > span { font: 11px var(--font-sans); color: var(--text-secondary); }
 .m-app.m-experience .result-verdict strong { font: 600 14px/1.6 var(--font-sans); color: #ffffff; }
 .m-app.m-experience .result-verdict p,
 .m-app.m-experience .analysis-result li { font: 12px/1.8 var(--font-sans); color: var(--text-secondary); overflow-wrap: anywhere; }
@@ -147,4 +147,29 @@
   .m-app.m-experience :is(.m-header,.m-controls,.m-kpis article,.m-scenario.active,.lab-modal) { box-shadow: none; background-image: none; }
   .m-app.m-experience :is(.lab-header,.lab-icon,.lab-header .icon-button,.lab-modal input,.lab-modal select,.lab-modal textarea,.result-score-grid > div,.result-verdict,.m-notice,.m-scenario-selection) { background: Canvas; color: CanvasText; border-color: ButtonText; }
   .m-app.m-experience .lab-modal :is(input,select,textarea):focus { outline-color: Highlight; }
+}
+
+/* Accent-only verdict/history styling follows existing severity classes. */
+.m-app.m-experience .result-verdict.low { background: var(--status-healthy-soft); border-color: var(--status-healthy-border); border-left-color: var(--status-healthy); }
+.m-app.m-experience .result-verdict.suspicious,
+.m-app.m-experience .result-verdict.medium,
+.m-app.m-experience .result-verdict.warning { background: var(--status-warning-soft); border-color: var(--status-warning-border); border-left-color: var(--status-warning); }
+.m-app.m-experience .result-verdict.high > span,
+.m-app.m-experience .result-verdict.critical > span { color: var(--status-danger); }
+.m-app.m-experience .result-verdict.suspicious > span,
+.m-app.m-experience .result-verdict.medium > span,
+.m-app.m-experience .result-verdict.warning > span { color: var(--status-warning); }
+.m-app.m-experience .result-verdict.low > span { color: var(--status-healthy); }
+.m-app.m-experience .history-row > i { background: var(--text-muted); box-shadow: none; }
+.m-app.m-experience .history-row > i.low { background: var(--status-healthy); }
+.m-app.m-experience .history-row > i.suspicious,
+.m-app.m-experience .history-row > i.medium,
+.m-app.m-experience .history-row > i.warning { background: var(--status-warning); }
+.m-app.m-experience .history-row > i.high,
+.m-app.m-experience .history-row > i.critical { background: var(--status-danger); }
+
+@media (forced-colors: active) {
+  .m-app.m-experience .result-verdict:is(.low,.suspicious,.medium,.warning,.high,.critical) { background: Canvas; border-color: ButtonText; }
+  .m-app.m-experience .result-verdict:is(.low,.suspicious,.medium,.warning,.high,.critical) > span { color: CanvasText; }
+  .m-app.m-experience .history-row > i:is(.low,.suspicious,.medium,.warning,.high,.critical) { background: CanvasText; }
 }
