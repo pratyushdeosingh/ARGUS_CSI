@@ -43,6 +43,7 @@ import {
 } from "./simulation";
 import { useMonitoring } from "./useMonitoring";
 import { MoneyGraph } from "./MoneyGraph";
+import { CaseBrowser } from "./CaseBrowser";
 import { NavigationShell, type Page } from "./NavigationShell";
 import { KpiTrend } from "./KpiTrend";
 import { runTrends, investigationTrend } from "./kpiTrends";
@@ -91,6 +92,8 @@ const newConfig = (
 const EMPTY: string[] = [];
 export default function App() {
   const [page, setPage] = useState<Page>("Overview");
+  const monitoringPage = page !== "Demo" && page !== "Lab";
+  const [caseSelection, setCaseSelection] = useState("");
   const [config, setConfig] = useState<RunConfig>(() => newConfig());
   const [running, setRunning] = useState(false);
   const [speed, setSpeed] = useState(2);
@@ -357,10 +360,10 @@ export default function App() {
           setSelectedAlert(item);
           setOpenedCase(null);
           void inspect(item.transactionId);
-          setPage("Overview");
+          if (page !== "Alerts") setPage("Overview");
         }}
       >
-        {page === "Overview" ? (
+        {monitoringPage ? (
           <span className={`m-alert-severity ${item.severity}`}>
             {item.severity}
           </span>
@@ -503,12 +506,12 @@ export default function App() {
                     </small>
                   </td>
                   <td className={tone(d?.graph)}>
-                    {page === "Overview" ? (
+                    {monitoringPage ? (
                       <span className="m-risk-value">{risk(d?.graph)}</span>
                     ) : risk(d?.graph)}
                   </td>
                   <td className={tone(d?.scam)}>
-                    {page === "Overview" ? (
+                    {monitoringPage ? (
                       <span className="m-risk-value">{risk(d?.scam)}</span>
                     ) : risk(d?.scam)}
                   </td>
@@ -573,7 +576,7 @@ export default function App() {
     </section>
   );
   const details = (
-    <section className="m-panel m-details">
+    <section className="m-panel m-details" key="details" id="transaction-inspector" tabIndex={-1}>
       <div className="m-panel-title">
         <div>
           <h2>Investigation details</h2>
@@ -599,7 +602,10 @@ export default function App() {
               <li key={e}>{e}</li>
             ))}
           </ul>
-          <button onClick={() => setPage("Alerts")}>Back to alerts</button>
+          <button onClick={() => {
+            setPage("Alerts");
+            if (page === "Alerts") document.getElementById("alert-queue")?.focus();
+          }}>Back to alerts</button>
         </div>
       )}
       {openedCase && (
@@ -785,8 +791,39 @@ export default function App() {
       )}
     </section>
   );
+  const network = (
+    <section className="m-panel m-network" key="network">
+      <div className="m-panel-title">
+        <div>
+          <h2>Money-flow investigation</h2>
+          <p>
+            {selected
+              ? `${selected.transaction_id} · ${related.length} connected payments`
+              : "Select a transaction to begin"}
+          </p>
+        </div>
+        <span className="m-legend">
+          <i /> Selected transfer
+        </span>
+      </div>
+      <MoneyGraph
+        transactions={related}
+        selected={selected?.transaction_id}
+        suspicious={suspicious}
+        onTransaction={choose}
+        onAccount={setAccount}
+      />
+      <div className="m-network-footer">
+        <span>
+          <i className="m-dot" /> Bounded account neighborhood · max
+          28 transfers
+        </span>
+        <span>Click an account or transfer to inspect</span>
+      </div>
+    </section>
+  );
   return (
-    <div className={page === "Overview" ? "m-app m-overview" : "m-app"}>
+    <div className={monitoringPage ? `m-app m-monitoring m-${page.toLowerCase()}-page${page === "Overview" ? " m-overview" : ""}` : "m-app"}>
       <a className="m-skip-link" href="#main-content">Skip to main content</a>
       <div className="m-workspace">
         <NavigationShell
@@ -812,7 +849,13 @@ export default function App() {
               <p>
                 {page === "Overview"
                   ? "Follow the money. Surface the signals. Investigate with context."
-                  : `Synthetic workspace · ${scenario.name}`}
+                  : page === "Transactions"
+                    ? `${inspection ? "Stored investigation context" : "Current synthetic run"} · ${transactions.length} retained payments`
+                    : page === "Alerts"
+                      ? `${alerts.length} retained alerts · current synthetic run · ${scenario.name}`
+                      : page === "Investigations"
+                        ? "Persistent financial and historical cross-domain records · independent of the current run"
+                        : `Synthetic workspace · ${scenario.name}`}
               </p>
             </div>
             <div className="m-source">
@@ -977,149 +1020,35 @@ export default function App() {
               )}
             </>
           ) : page === "Investigations" ? (
-            <section className="m-panel m-cases">
-              <div className="m-panel-title">
-                <div>
-                  <h2>Persisted investigation cases</h2>
-                  <p>
-                    Persisted financial investigations and historical
-                    cross-domain cases
-                  </p>
-                </div>
-                <button onClick={refresh}>Refresh</button>
-              </div>
-              {financialCases.map((financial) => (
-                <article key={financial.case_id}>
-                  <div>
-                    <span
-                      className={`m-status ${financial.severity === "critical" ? "cancelled" : "pending"}`}
-                    >
-                      {financial.severity}
-                    </span>
-                    <span className="m-mono">{financial.case_id}</span>
-                    <span className="m-muted">{financial.status}</span>
-                  </div>
-                  <h3>
-                    {financial.source} ·{" "}
-                    {financial.scenario_id ?? "Financial investigation"}
-                  </h3>
-                  <p>{financial.summary}</p>
-                  <p>Session: {financial.session_id}</p>
-                  <p>
-                    Created: {financial.created_at} · Updated:{" "}
-                    {financial.updated_at}
-                  </p>
-                  <p>Accounts: {financial.accounts.join(", ")}</p>
-                  <p>
-                    Transactions:{" "}
-                    {financial.transaction_ids.slice(-20).join(", ")}
-                    {financial.transaction_ids.length > 20
-                      ? ` · ${financial.transaction_ids.length} total`
-                      : ""}
-                  </p>
-                  <p>
-                    {Object.entries(financial.risk_scores)
-                      .map(([name, value]) => `${name}: ${risk(value)}`)
-                      .join(" · ")}
-                  </p>
-                  <ul>
-                    {financial.evidence.slice(-12).map((e) => (
-                      <li key={e}>{e}</li>
-                    ))}
-                  </ul>
-                  <button onClick={() => void openCase(financial)}>
-                    Open financial investigation
-                  </button>
-                </article>
-              ))}
-              {incidents.length ? (
-                incidents.map((incident) => (
-                  <article key={incident.incident_id}>
-                    <div>
-                      <span
-                        className={`m-status ${incident.severity === "critical" ? "cancelled" : "pending"}`}
-                      >
-                        {incident.severity}
-                      </span>
-                      <span className="m-mono">{incident.incident_id}</span>
-                      <span className="m-muted">{incident.status}</span>
-                    </div>
-                    <h3>{incident.verdict.replaceAll("_", " ")}</h3>
-                    <p>
-                      {incident.incident_id === "INC-001"
-                        ? "Canonical Demo"
-                        : "Historical cross-domain / Data Lab"}{" "}
-                      · Created: {incident.timestamp}
-                    </p>
-                    <button onClick={() => void openCase(incident)}>
-                      Open historical investigation
-                    </button>
-                    <p>{incident.summary}</p>
-                    <ul>
-                      {incident.evidence.map((e) => (
-                        <li key={e}>{e}</li>
-                      ))}
-                    </ul>
-                    <p>Accounts: {incident.affected_accounts.join(", ")}</p>
-                    {incident.recommended_actions.map((a) => (
-                      <p key={a.action + a.target}>
-                        Simulated response: {a.action} · {a.target} · {a.status}
-                      </p>
-                    ))}
-                    {incident.status === "awaiting_approval" && (
-                      <button
-                        disabled={caseBusy}
-                        onClick={() => {
-                          setCaseBusy(true);
-                          void approveIncident(incident.incident_id)
-                            .then((r) => {
-                              setAudit((v) => ({
-                                ...v,
-                                [incident.incident_id]: r.audit_events,
-                              }));
-                              refresh();
-                            })
-                            .catch((e) => setCaseError(String(e)))
-                            .finally(() => setCaseBusy(false));
-                        }}
-                      >
-                        Approve simulated containment
-                      </button>
-                    )}
-                    <button
-                      onClick={() =>
-                        void loadAuditEvents(incident.incident_id)
-                          .then((events) =>
-                            setAudit((v) => ({
-                              ...v,
-                              [incident.incident_id]: events,
-                            })),
-                          )
-                          .catch((e) => setCaseError(String(e)))
-                      }
-                    >
-                      View audit trail
-                    </button>
-                    {audit[incident.incident_id]?.map((e, i) => (
-                      <p key={i} className="m-muted">
-                        {e.timestamp} · {e.action} · {e.result}
-                      </p>
-                    ))}
-                  </article>
-                ))
-              ) : !financialCases.length ? (
-                <div className="m-empty">
-                  <Network size={26} />
-                  <h3>No persisted cases available</h3>
-                  <p>
-                    Financial cases require at least two connected completed
-                    payments with qualifying detector evidence in one session
-                    within 15 minutes. Historical Canonical Demo and Lab cases
-                    also appear here.
-                  </p>
-                </div>
-              ) : null}
-            </section>
+            <CaseBrowser
+              financial={financialCases}
+              historical={incidents}
+              selectedKey={caseSelection}
+              onSelect={setCaseSelection}
+              onOpen={(item) => {
+                setCaseSelection("case_id" in item ? `financial:${item.case_id}` : `historical:${item.incident_id}`);
+                void openCase(item);
+              }}
+              onRefresh={refresh}
+              audit={audit}
+              busy={caseBusy}
+              formatRisk={risk}
+              onApprove={(incident) => {
+                setCaseBusy(true);
+                void approveIncident(incident.incident_id)
+                  .then((r) => {
+                    setAudit((v) => ({ ...v, [incident.incident_id]: r.audit_events }));
+                    refresh();
+                  })
+                  .catch((e) => setCaseError(String(e)))
+                  .finally(() => setCaseBusy(false));
+              }}
+              onAudit={(incident) => {
+                void loadAuditEvents(incident.incident_id)
+                  .then((events) => setAudit((v) => ({ ...v, [incident.incident_id]: events })))
+                  .catch((e) => setCaseError(String(e)));
+              }}
+            />
           ) : page === "Lab" ? (
             <section className="m-panel m-lab-intro">
               <FlaskConical size={28} />
@@ -1194,18 +1123,21 @@ export default function App() {
                   );
                 })}
               </section>
+              <div className="m-operational-workspace">
               {page === "Alerts" ? (
-                <section className="m-panel">
+                <section className="m-panel m-alert-review" id="alert-queue" tabIndex={-1} aria-label="Current run alerts">
                   <div className="m-panel-title">
                     <div>
-                      <h2>Alert evidence review</h2>
+                      <h2>Alert evidence review <span className="m-count">{alerts.length}</span></h2>
                       <p>
                         Severity then recency · selecting an alert opens its
                         payment context
                       </p>
+                      {selectedAlert && <a className="m-selected-evidence-link" href="#transaction-inspector">Selected evidence ↓</a>}
                     </div>
                     <Bell size={18} />
                   </div>
+                  <div className="m-alert-review-list">
                   {alerts.length ? (
                     alerts.map(alertItem)
                   ) : (
@@ -1218,6 +1150,7 @@ export default function App() {
                       </p>
                     </div>
                   )}
+                  </div>
                 </section>
               ) : (
                 <div
@@ -1263,36 +1196,8 @@ export default function App() {
                 </div>
               )}
               <div className="m-investigation-grid">
-                <section className="m-panel m-network">
-                  <div className="m-panel-title">
-                    <div>
-                      <h2>Money-flow investigation</h2>
-                      <p>
-                        {selected
-                          ? `${selected.transaction_id} · ${related.length} connected payments`
-                          : "Select a transaction to begin"}
-                      </p>
-                    </div>
-                    <span className="m-legend">
-                      <i /> Selected transfer
-                    </span>
-                  </div>
-                  <MoneyGraph
-                    transactions={related}
-                    selected={selected?.transaction_id}
-                    suspicious={suspicious}
-                    onTransaction={choose}
-                    onAccount={setAccount}
-                  />
-                  <div className="m-network-footer">
-                    <span>
-                      <i className="m-dot" /> Bounded account neighborhood · max
-                      28 transfers
-                    </span>
-                    <span>Click an account or transfer to inspect</span>
-                  </div>
-                </section>
-                {details}
+                {page === "Alerts" ? [details, network] : [network, details]}
+              </div>
               </div>
             </>
           )}

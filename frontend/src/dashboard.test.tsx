@@ -412,9 +412,8 @@ describe("alert recovery and financial investigations", () => {
     await act(async () =>
       (container.querySelector(".m-alert") as HTMLButtonElement).click(),
     );
-    expect(container.querySelector("h1")?.textContent).toContain(
-      "Financial activity overview",
-    );
+    expect(container.querySelector("h1")?.textContent).toBe("Alerts");
+    expect(container.querySelector('.m-alert[aria-pressed="true"]')?.textContent).toContain("Scam explanation");
     expect(container.querySelector(".m-details")?.textContent).toContain(
       "Scam explanation",
     );
@@ -430,9 +429,35 @@ describe("alert recovery and financial investigations", () => {
         ?.getAttribute("data-selected"),
     ).toBeNull();
     await click("Back to alerts");
+    expect(document.activeElement?.id).toBe("alert-queue");
     expect(
       container.querySelector(".m-alert")?.getAttribute("aria-pressed"),
     ).toBe("true");
+  });
+  it("keeps graph and specialist alerts for one payment distinct in the list-and-inspector workspace", async () => {
+    const { tx, session } = await startPaused();
+    for (const [event_type, alert_id, message, evidence] of [
+      ["alert.created", "graph-exact", "Graph-only explanation", "Graph-only evidence"],
+      ["scam_alert.created", "scam-exact", "Specialist-only explanation", "Specialist-only evidence"],
+    ]) {
+      await emit({ event_id: alert_id, event_type, session_id: session, timestamp: tx.timestamp,
+        data: { alert_id, transaction_id: tx.transaction_id, severity: "high", risk_score: event_type === "alert.created" ? .9 : 92, scam_score: 88, message, supporting_evidence: [evidence] } });
+    }
+    await nav("Alerts");
+    const graph = container.querySelector('[data-testid="graph"]');
+    const selectAlert = async (text: string) => act(async () =>
+      (Array.from(container.querySelectorAll(".m-alert")).find(e => e.textContent?.includes(text)) as HTMLButtonElement).click());
+    await selectAlert("Graph-only explanation");
+    expect(container.querySelector("h1")?.textContent).toBe("Alerts");
+    expect(container.querySelector('[aria-label="Selected alert evidence"]')?.textContent).toContain("graph-exact");
+    expect(container.querySelector('[aria-label="Selected alert evidence"]')?.textContent).not.toContain("Specialist-only evidence");
+    await selectAlert("Specialist-only explanation");
+    expect(container.querySelector('[aria-label="Selected alert evidence"]')?.textContent).toContain("scam-exact");
+    expect(container.querySelector('[aria-label="Selected alert evidence"]')?.textContent).toContain("Specialist-only evidence");
+    expect(container.querySelectorAll('.m-alert[aria-pressed="true"]')).toHaveLength(1);
+    expect(container.querySelector('[data-testid="graph"]')).toBe(graph);
+    expect(graph?.getAttribute("data-selected")).toBe(tx.transaction_id);
+    expect(syntheticSource.ingest).toHaveBeenCalledTimes(1);
   });
   it("refreshes persisted cases on a stream notification, opens their stored context, and keeps live run state separate", async () => {
     const { tx } = await startPaused();
