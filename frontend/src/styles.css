@@ -1028,3 +1028,76 @@
   .m-header .m-connection { max-width: 100px; white-space: normal; overflow-wrap: anywhere; }
 }
 @media (max-width: 359px) { .m-header .m-connection { max-width: 70px; } }
+
+/* Three bounded navigation islands; the positioning header never paints glass. */
+.m-app.m-experience .m-header.m-floating-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: stretch;
+  gap: 16px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+.m-app.m-experience .m-floating-header .m-header-block {
+  min-width: 0;
+  min-height: 64px;
+  padding: 8px 12px;
+  border: 1px solid var(--monitor-edge);
+  border-radius: var(--radius-floating);
+  background: var(--surface-control);
+  box-shadow: var(--monitor-shadow), var(--monitor-halo);
+}
+.m-app.m-experience .m-floating-header .m-brand { justify-self: start; }
+.m-app.m-experience .m-floating-header .m-brand-caption { display: inline; }
+.m-app.m-experience .m-floating-header .m-nav-island { display: flex; align-items: center; justify-content: center; padding-inline: 8px; }
+.m-app.m-experience .m-floating-header .m-desktop-nav { margin: 0; }
+.m-app.m-experience .m-floating-header .m-header-actions { justify-self: end; margin: 0; }
+.m-app.m-experience .m-floating-header .m-desktop-nav button.active { border-color: #777777; }
+@supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  @supports selector(:has(*)) {
+    .m-app.m-experience .m-floating-header .m-header-block {
+      background: var(--surface-glass);
+      -webkit-backdrop-filter: blur(var(--control-blur));
+      backdrop-filter: blur(var(--control-blur));
+    }
+  }
+}
+.m-app.m-experience .m-floating-header[data-opaque="true"] .m-header-block {
+  background: var(--surface-control);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+@media (min-width: 1120px) and (max-width: 1279px) {
+  .m-app.m-experience .m-floating-header .m-brand { display: grid; grid-template-columns: auto auto; column-gap: 9px; row-gap: 0; }
+  .m-app.m-experience .m-floating-header .m-brand-mark { grid-row: 1 / 3; }
+  .m-app.m-experience .m-floating-header .m-brand-caption { grid-column: 2; margin: 0; font-size: 11px; }
+}
+@media (max-width: 1119px) {
+  .m-app.m-experience .m-header.m-floating-header { grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; }
+  .m-app.m-experience .m-floating-header .m-brand-caption { display: none; }
+  .m-app.m-experience .m-floating-header .m-nav-island { padding: 8px; }
+  .m-app.m-experience .m-floating-header .m-menu-toggle { display: flex; width: 100%; gap: 14px; margin: 0; border-color: transparent; background: transparent; }
+  .m-app.m-experience .m-floating-header .m-mobile-nav { top: calc(100% + 8px); }
+}
+@media (max-width: 650px) {
+  .m-app.m-experience .m-header.m-floating-header { grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
+  .m-app.m-experience .m-floating-header .m-header-block { min-height: 52px; padding: 6px 8px; }
+  .m-app.m-experience .m-floating-header .m-nav-island { grid-column: 1 / -1; grid-row: 2; min-height: 52px; padding: 3px 8px; }
+  .m-app.m-experience .m-floating-header .m-header-actions { grid-column: 2; grid-row: 1; gap: 2px; }
+  .m-app.m-experience .m-floating-header .m-icon-control { width: 40px; min-height: 40px; }
+}
+@media (max-width: 359px) {
+  .m-app.m-experience .m-floating-header .m-header-block { padding-inline: 6px; }
+  .m-app.m-experience .m-floating-header .m-icon-control { width: 28px; min-height: 36px; }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .m-app.m-experience .m-floating-header .m-header-block { background: var(--surface-control); -webkit-backdrop-filter: none; backdrop-filter: none; }
+}
+@media (forced-colors: active) {
+  .m-app.m-experience .m-floating-header .m-header-block { background: Canvas; border-color: ButtonText; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
+}

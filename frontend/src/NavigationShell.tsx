@@ -88,7 +88,7 @@ export const NavigationShell = memo(function NavigationShell({ page, alertCount,
 
   return (
     <header
-      className="m-header m-material-2"
+      className="m-header m-floating-header"
       data-opaque={opaque ? "true" : undefined}
       ref={header}
       onFocusCapture={(event) => {
@@ -102,13 +102,19 @@ export const NavigationShell = memo(function NavigationShell({ page, alertCount,
         }
       }}
     >
-      <div className="m-brand">
+      <div className="m-brand m-header-block">
         <span className="m-brand-mark"><Eye size={23} aria-hidden="true" /></span>
         <strong>ARGUS</strong>
         <span className="m-brand-caption">Financial Fraud Intelligence</span>
       </div>
-      <nav className="m-desktop-nav" aria-label="Primary navigation" ref={desktopNav}>{links()}</nav>
-      <div className="m-header-actions">
+      <div className="m-nav-island m-header-block">
+        <nav className="m-desktop-nav" aria-label="Primary navigation" ref={desktopNav}>{links()}</nav>
+        <button type="button" className="m-menu-toggle" ref={trigger} aria-label={`Navigation menu · ${page}`} aria-expanded={menuOpen} aria-controls={menuOpen ? menuId : undefined} onClick={() => menuOpen ? closeMenu(true) : setMenuOpen(true)}>
+          <span>{menuOpen ? <X size={17} aria-hidden="true" /> : <Menu size={17} aria-hidden="true" />} Menu</span>
+          <span className="m-current-destination">{page}<ChevronDown size={15} aria-hidden="true" /></span>
+        </button>
+      </div>
+      <div className="m-header-actions m-header-block">
         <span className={`m-connection ${connection === "Connected" ? "healthy" : "warning"}`} role="status">
           <i aria-hidden="true" />{connection}
         </span>
@@ -116,10 +122,6 @@ export const NavigationShell = memo(function NavigationShell({ page, alertCount,
         <button type="button" className="m-icon-control" onClick={() => setOpaque(value => !value)} aria-label="Reduce transparency" aria-pressed={opaque} title="Reduce transparency"><Contrast size={16} aria-hidden="true" /></button>
         <span className="m-avatar" title="Local analyst workspace">AN</span>
       </div>
-      <button type="button" className="m-menu-toggle" ref={trigger} aria-label={`Navigation menu · ${page}`} aria-expanded={menuOpen} aria-controls={menuOpen ? menuId : undefined} onClick={() => menuOpen ? closeMenu(true) : setMenuOpen(true)}>
-        <span>{menuOpen ? <X size={17} aria-hidden="true" /> : <Menu size={17} aria-hidden="true" />} Menu</span>
-        <span className="m-current-destination">{page}<ChevronDown size={15} aria-hidden="true" /></span>
-      </button>
       {menuOpen && <nav id={menuId} className="m-mobile-nav m-material-3" aria-label="Mobile navigation" ref={mobileNav}>{links(true)}</nav>}
     </header>
   );
