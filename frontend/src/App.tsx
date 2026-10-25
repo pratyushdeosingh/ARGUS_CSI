@@ -360,7 +360,13 @@ export default function App() {
           setPage("Overview");
         }}
       >
-        <span className={`m-alert-dot ${item.severity}`} />
+        {page === "Overview" ? (
+          <span className={`m-alert-severity ${item.severity}`}>
+            {item.severity}
+          </span>
+        ) : (
+          <span className={`m-alert-dot ${item.severity}`} />
+        )}
         <div>
           <strong>{item.type}</strong>
           <small className="m-mono">{item.transactionId}</small>
@@ -496,8 +502,16 @@ export default function App() {
                       {label}
                     </small>
                   </td>
-                  <td className={tone(d?.graph)}>{risk(d?.graph)}</td>
-                  <td className={tone(d?.scam)}>{risk(d?.scam)}</td>
+                  <td className={tone(d?.graph)}>
+                    {page === "Overview" ? (
+                      <span className="m-risk-value">{risk(d?.graph)}</span>
+                    ) : risk(d?.graph)}
+                  </td>
+                  <td className={tone(d?.scam)}>
+                    {page === "Overview" ? (
+                      <span className="m-risk-value">{risk(d?.scam)}</span>
+                    ) : risk(d?.scam)}
+                  </td>
                   <td>
                     <span
                       className={
@@ -772,7 +786,7 @@ export default function App() {
     </section>
   );
   return (
-    <div className="m-app">
+    <div className={page === "Overview" ? "m-app m-overview" : "m-app"}>
       <a className="m-skip-link" href="#main-content">Skip to main content</a>
       <div className="m-workspace">
         <NavigationShell
