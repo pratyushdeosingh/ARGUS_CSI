@@ -17,7 +17,7 @@
 .m-app.m-monitoring .m-alert-review .m-alert { padding: 16px; }
 .m-app.m-monitoring .m-alert-review .m-alert small:not(.m-mono) { -webkit-line-clamp: 3; }
 .m-app.m-monitoring.m-alerts-page .m-details { max-height: 740px; }
-.m-app.m-monitoring .m-alert-severity.informational { color: #bfc9ce; background: #2b3439; border-color: #4b5c66; }
+.m-app.m-monitoring .m-alert-severity.informational { color: #c2c2c2; background: #292929; border-color: #555555; }
 .m-app.m-monitoring .m-case-workspace { display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr); gap: 16px; align-items: start; }
 .m-app.m-monitoring .m-case-workspace > * { min-width: 0; }
 .m-app.m-monitoring .m-case-browser .m-panel-title button { min-height: 36px; font-size: 12px; }
@@ -25,8 +25,8 @@
 .m-app.m-monitoring .m-case-scope a { color: var(--text-primary); text-decoration: underline; text-underline-offset: 3px; }
 .m-app.m-monitoring .m-case-list { max-height: 720px; overflow: auto; background: var(--monitor-reading); }
 .m-app.m-monitoring .m-case-row { display: flex; flex-direction: column; align-items: stretch; justify-content: flex-start; text-align: left; width: 100%; gap: 7px; border: 0; border-bottom: 1px solid var(--monitor-divider); border-radius: 0; background: transparent; padding: 13px; }
-.m-app.m-monitoring .m-case-row:hover:not(:disabled) { background: #292d32; }
-.m-app.m-monitoring .m-case-row[aria-pressed="true"] { background: #32363c; box-shadow: inset 3px 0 #c3c8cf; }
+.m-app.m-monitoring .m-case-row:hover:not(:disabled) { background: #242424; }
+.m-app.m-monitoring .m-case-row[aria-pressed="true"] { background: #2d2d2d; box-shadow: inset 3px 0 #d6d6d6; }
 .m-app.m-monitoring .m-case-row-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .m-app.m-monitoring .m-case-row-top > .m-mono { color: var(--text-primary); font-size: 12px; overflow-wrap: anywhere; }
 .m-app.m-monitoring .m-case-row .m-alert-severity { flex: 0 0 auto; min-width: 59px; }
@@ -40,7 +40,7 @@
 .m-app.m-monitoring .m-case-row-foot time { overflow-wrap: anywhere; }
 .m-app.m-monitoring .m-case-row-foot > svg { margin-left: auto; }
 .m-app.m-monitoring .m-case-inspector { max-height: 860px; overflow: auto; scroll-margin-top: 100px; }
-.m-app.m-monitoring .m-case-inspector > .m-panel-title { position: sticky; top: 0; z-index: 2; background: #25282c; }
+.m-app.m-monitoring .m-case-inspector > .m-panel-title { position: sticky; top: 0; z-index: 2; background: #202020; }
 .m-app.m-monitoring .m-case-inspector .m-panel-title p { overflow-wrap: anywhere; }
 .m-app.m-monitoring .m-case-reading { padding: 16px; min-width: 0; }
 .m-app.m-monitoring .m-case-identity { display: flex; justify-content: space-between; gap: 10px; align-items: center; flex-wrap: wrap; }

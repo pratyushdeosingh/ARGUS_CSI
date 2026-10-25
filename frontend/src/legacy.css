@@ -3,18 +3,18 @@
 :root {
   color-scheme: dark;
   font-family: Inter, system-ui, sans-serif;
-  background: #111214;
-  color: #f2f1ee;
+  background: #050505;
+  color: #ffffff;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
-  --bg: #111214;
-  --surface: #1b1d1f;
-  --surface-raised: #222427;
-  --border: #303236;
-  --border-bright: #45484a;
-  --text: #f2f1ee;
-  --muted: #a7a7aa;
-  --faint: #74777a;
+  --bg: #050505;
+  --surface: #111111;
+  --surface-raised: #1c1c1c;
+  --border: #333333;
+  --border-bright: #4a4a4a;
+  --text: #ffffff;
+  --muted: #b7b7b7;
+  --faint: #a1a1a1;
   --mint: #a5b9a8;
   --mint-dark: #2c3730;
   --danger: #c48b83;
@@ -35,11 +35,7 @@ body {
   margin: 0;
   min-width: 0;
   min-height: 100vh;
-  background:
-    linear-gradient(rgba(25, 66, 57, 0.06) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(25, 66, 57, 0.06) 1px, transparent 1px),
-    var(--bg);
-  background-size: 28px 28px;
+  background: var(--bg);
 }
 
 button,

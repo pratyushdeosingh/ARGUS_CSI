@@ -9,27 +9,27 @@
 
 /* Semantic foundation. Legacy aliases live in styles.css until later screen passes. */
 .m-app {
-  --color-app: #111214;
-  --surface-data: #191b1e;
-  --surface-matte: #1d1f22;
-  --surface-raised: #272a2e;
-  --surface-control: #202327;
-  --surface-glass: rgb(32 35 39 / 92%);
-  --surface-overlay: #26292d;
-  --border-subtle: #393d42;
-  --border-control: #666c73;
+  --color-app: #050505;
+  --surface-data: #0d0d0d;
+  --surface-matte: #151515;
+  --surface-raised: #242424;
+  --surface-control: #191919;
+  --surface-glass: rgb(24 24 24 / 66%);
+  --surface-overlay: #202020;
+  --border-subtle: #3d3d3d;
+  --border-control: #6b6b6b;
   --edge-silver: rgb(255 255 255 / 14%);
   --shadow-raised: 0 3px 10px rgb(0 0 0 / 10%);
   --shadow-floating: 0 8px 24px rgb(0 0 0 / 24%);
-  --text-primary: #f2f1ee;
-  --text-secondary: #b8b8bb;
-  --text-muted: #a1a3a9;
+  --text-primary: #ffffff;
+  --text-secondary: #c4c4c4;
+  --text-muted: #aaaaaa;
   --status-danger: #ce9189;
   --status-warning: #c4ad7b;
   --status-healthy: #8eac9c;
-  --state-selected: #41464d;
-  --state-hover: #34383e;
-  --focus-ring: #d3c59e;
+  --state-selected: #333333;
+  --state-hover: #2a2a2a;
+  --focus-ring: #e6e6e6;
   --radius-sm: 5px;
   --radius-control: 8px;
   --radius-panel: 12px;

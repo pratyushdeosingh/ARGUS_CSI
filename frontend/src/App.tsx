@@ -823,7 +823,7 @@ export default function App() {
     </section>
   );
   return (
-    <div className={monitoringPage ? `m-app m-monitoring m-${page.toLowerCase()}-page${page === "Overview" ? " m-overview" : ""}` : "m-app"}>
+    <div className={`m-app m-experience m-${page.toLowerCase()}-page${monitoringPage ? " m-monitoring" : ""}${page === "Overview" ? " m-overview" : ""}`}>
       <a className="m-skip-link" href="#main-content">Skip to main content</a>
       <div className="m-workspace">
         <NavigationShell
@@ -923,7 +923,14 @@ export default function App() {
           </section>
           {page === "Demo" ? (
             <>
+              <section className="m-demo-guide m-panel" aria-label="Demo workflow">
+                <span className="m-eyebrow">GUIDED DEMONSTRATION</span>
+                <h2>Present the evidence, step by step.</h2>
+                <p>Load a scenario, start monitoring explicitly, then follow its payments, detector signals, and account relationships.</p>
+                <ol><li><span>01</span>Choose a scenario</li><li><span>02</span>Start the simulation</li><li><span>03</span>Inspect the evidence</li></ol>
+              </section>
               <div className="m-demo-config m-panel">
+                <span className="m-eyebrow">RUN CONFIGURATION</span>
                 <h2>Configure a reproducible run</h2>
                 <p>
                   Reset or replay creates a new isolated session. No existing
@@ -977,6 +984,7 @@ export default function App() {
                   timestamps advance independently of network delivery speed.
                 </small>
               </div>
+              <div className="m-demo-section-heading"><h2>Scenario library</h2><p>Loading a scenario prepares an isolated run. Start it when you are ready.</p></div>
               <div className="m-scenario-grid">
                 {SCENARIOS.map((s, i) => (
                   <article
@@ -987,6 +995,7 @@ export default function App() {
                       SCENARIO {String(i + 1).padStart(2, "0")}
                     </span>
                     <h2>{s.name}</h2>
+                    {config.scenario === s.id && <span className="m-scenario-selection">Selected scenario</span>}
                     <p>{s.description}</p>
                     <small>Expected pattern</small>
                     <p>{s.expected}</p>
@@ -1052,14 +1061,16 @@ export default function App() {
           ) : page === "Lab" ? (
             <section className="m-panel m-lab-intro">
               <FlaskConical size={28} />
+              <span className="m-eyebrow">ANALYST SANDBOX</span>
               <h2>Analyze a dataset</h2>
               <p>
                 Use the existing Intelligence Lab for JSON transactions,
                 baseline history and infrastructure correlation.
               </p>
-              <button onClick={() => setLabOpen(true)}>
+              <button className="m-primary" data-lab-launcher onClick={() => setLabOpen(true)}>
                 Open Intelligence Lab
               </button>
+              <div className="m-lab-capabilities"><article><span>01</span><h3>Prepare inputs</h3><p>Edit transactions, behavioral history, and optional host telemetry as JSON.</p></article><article><span>02</span><h3>Run existing detectors</h3><p>Submit the dataset for financial analysis and available cross-domain correlation.</p></article><article><span>03</span><h3>Read the result</h3><p>Inspect returned scores, explanations, and persisted incident history.</p></article></div>
             </section>
           ) : (
             <>

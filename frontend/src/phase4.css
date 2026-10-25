@@ -1,0 +1,150 @@
+/* Final palette and Demo/Lab presentation. Existing monitoring geometry stays intact. */
+.m-app.m-experience .m-header,
+.m-app.m-experience .m-controls,
+.m-app.m-experience .m-kpis article { box-shadow: var(--monitor-shadow), var(--monitor-halo); }
+.m-app.m-experience .m-header { border-color: var(--monitor-edge); }
+.m-app.m-experience .m-primary { color: #080808; background: #f6f6f6; border-color: #ffffff; }
+.m-app.m-experience .m-primary:hover:not(:disabled) { color: #080808; background: #ffffff; }
+.m-app.m-experience .m-run-summary strong { color: var(--text-primary); }
+.m-app.m-experience .m-eyebrow { color: var(--text-secondary); }
+.m-app.m-experience .m-legend { color: var(--text-secondary); }
+.m-app.m-experience .m-legend i { background: #d6d6d6; }
+.m-app.m-experience .m-related button strong { color: var(--text-primary); }
+.m-app.m-experience .m-kpi-neutral,
+.m-app.m-experience .m-kpi-volume .m-kpi-up,
+.m-app.m-experience .m-kpi-volume .m-kpi-down { color: var(--text-secondary); }
+.m-app.m-experience .m-notice { background: #191919; border-color: #494949; color: var(--text-primary); }
+.m-app.m-experience .m-demo-guide { padding: 22px; margin-bottom: 18px; }
+.m-app.m-experience .m-demo-guide h2 { font-size: 22px; margin-top: 9px; letter-spacing: -.5px; }
+.m-app.m-experience .m-demo-guide > p { color: var(--text-secondary); font-size: 13px; margin-top: 10px; max-width: 800px; }
+.m-app.m-experience .m-demo-guide ol { padding: 0; margin: 20px 0 0; display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 12px; list-style: none; }
+.m-app.m-experience .m-demo-guide li { display: flex; align-items: center; gap: 10px; background: var(--monitor-reading); border: 1px solid var(--monitor-divider); border-radius: 8px; padding: 12px; font-size: 12px; }
+.m-app.m-experience .m-demo-guide li > span { color: var(--text-secondary); font-family: var(--font-mono); font-size: 11px; }
+.m-app.m-experience .m-demo-config { padding: 22px; margin-bottom: 24px; }
+.m-app.m-experience .m-demo-config h2 { margin-top: 8px; }
+.m-app.m-experience .m-demo-config p { color: var(--text-secondary); font-size: 12px; line-height: 1.7; margin: 10px 0 18px; max-width: 900px; }
+.m-app.m-experience .m-demo-config > div { display: grid; grid-template-columns: repeat(3,minmax(130px,1fr)) auto auto; align-items: end; gap: 12px; }
+.m-app.m-experience .m-demo-config label { color: var(--text-secondary); font-size: 12px; min-width: 0; }
+.m-app.m-experience .m-demo-config input { width: 100%; max-width: none; min-width: 0; min-height: 40px; background: var(--monitor-reading); color: var(--text-primary); }
+.m-app.m-experience .m-demo-config button { min-height: 40px; font-size: 12px; }
+.m-app.m-experience .m-demo-config > small { display: block; color: var(--text-secondary); font-family: var(--font-mono); font-size: 11px; line-height: 1.7; overflow-wrap: anywhere; }
+.m-app.m-experience .m-demo-section-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 14px; margin-bottom: 14px; }
+.m-app.m-experience .m-demo-section-heading p { font-size: 12px; color: var(--text-secondary); }
+.m-app.m-experience .m-scenario-grid { gap: 16px; }
+.m-app.m-experience .m-scenario { padding: 20px; gap: 12px; }
+.m-app.m-experience .m-scenario.active { background: linear-gradient(125deg,rgb(255 255 255 / 4%),transparent 65%), var(--monitor-panel); border-color: rgb(255 255 255 / 42%); box-shadow: var(--monitor-shadow), var(--monitor-halo); }
+.m-app.m-experience .m-scenario h2 { font-size: 17px; color: var(--text-primary); }
+.m-app.m-experience .m-scenario p { font-size: 12px; line-height: 1.7; color: var(--text-secondary); }
+.m-app.m-experience .m-scenario small { color: var(--text-primary); font-size: 11px; margin-top: 5px; }
+.m-app.m-experience .m-scenario button { min-height: 40px; font-size: 12px; margin-top: auto; }
+.m-app.m-experience .m-scenario-selection { font-size: 11px; color: var(--text-primary); border: 1px solid #636363; background: #252525; padding: 4px 7px; border-radius: 5px; }
+.m-app.m-experience .m-lab-intro { padding: 26px; gap: 16px; }
+.m-app.m-experience .m-lab-intro > svg { color: var(--text-primary); }
+.m-app.m-experience .m-lab-intro > h2 { font-size: 22px; letter-spacing: -.5px; }
+.m-app.m-experience .m-lab-intro > p { color: var(--text-secondary); max-width: 750px; font-size: 13px; line-height: 1.7; }
+.m-app.m-experience .m-lab-intro > button { min-height: 42px; }
+.m-app.m-experience .m-lab-capabilities { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 14px; width: 100%; margin-top: 8px; }
+.m-app.m-experience .m-lab-capabilities article { background: var(--monitor-reading); padding: 18px; border: 1px solid var(--monitor-divider); border-radius: 9px; }
+.m-app.m-experience .m-lab-capabilities span { color: var(--text-secondary); font: 11px var(--font-mono); }
+.m-app.m-experience .m-lab-capabilities h3 { margin: 12px 0 8px; color: var(--text-primary); }
+.m-app.m-experience .m-lab-capabilities p { font-size: 12px; line-height: 1.7; color: var(--text-secondary); }
+/* Embedded Canonical Demo keeps its existing layout and all response controls. */
+.m-app.m-experience .m-legacy { --bg: #050505; --surface: #111111; --surface-raised: #1b1b1b; --border: #3b3b3b; --text: #ffffff; --muted: #c4c4c4; --faint: #aaaaaa; }
+.m-app.m-experience .m-legacy :is(.panel,.signal-card,.command-strip) { background: var(--monitor-panel); border-color: var(--monitor-edge); box-shadow: var(--monitor-shadow); }
+.m-app.m-experience .m-legacy .topbar { background: #101010; border-color: var(--monitor-edge); }
+.m-app.m-experience .m-legacy :is(h1,h2,h3) { color: var(--text-primary); }
+/* No full-screen sampling: the backdrop only dims; editors/results stay solid. */
+.m-app.m-experience .lab-backdrop { background: rgb(0 0 0 / 80%); -webkit-backdrop-filter: none; backdrop-filter: none; padding: 24px; }
+.m-app.m-experience .lab-modal { display: flex; flex-direction: column; width: min(1500px,100%); height: min(880px,calc(100dvh - 48px)); max-height: calc(100dvh - 48px); min-height: 0; min-width: 0; background: var(--monitor-panel); border: 1px solid rgb(255 255 255 / 28%); border-radius: 14px; color: var(--text-primary); box-shadow: var(--monitor-shadow), var(--monitor-halo), 0 24px 80px rgb(0 0 0 / 70%); }
+.m-app.m-experience .lab-header { min-height: 86px; flex-shrink: 0; background: var(--monitor-control); border-color: var(--monitor-edge); padding: 16px 20px; gap: 16px; }
+.m-app.m-experience .lab-title { min-width: 0; gap: 12px; }
+.m-app.m-experience .lab-title > div { min-width: 0; }
+.m-app.m-experience .lab-title h2 { color: #ffffff; font-size: 18px; margin: 5px 0; }
+.m-app.m-experience .lab-title p { font-size: 11px; color: var(--text-secondary); line-height: 1.5; max-width: 700px; }
+.m-app.m-experience .lab-title .eyebrow { font: 10px var(--font-sans); letter-spacing: .12em; color: var(--text-secondary); }
+.m-app.m-experience .lab-icon { background: #222222; border-color: #555555; color: #ffffff; flex: 0 0 40px; }
+.m-app.m-experience .lab-header .icon-button { flex: 0 0 40px; min-height: 40px; color: #ffffff; background: #242424; border-color: #5b5b5b; }
+.m-app.m-experience .lab-content { flex: 1; min-height: 0; max-height: none; grid-template-columns: minmax(0,1.55fr) minmax(300px,1fr); overflow: auto; }
+.m-app.m-experience .lab-editor-column,
+.m-app.m-experience .lab-results-column { min-width: 0; padding: 20px; background: var(--monitor-reading); }
+.m-app.m-experience .lab-results-column { border-color: var(--monitor-divider); }
+.m-app.m-experience .lab-template-row { grid-template-columns: minmax(0,.8fr) minmax(0,1fr); gap: 16px; align-items: center; margin-bottom: 18px; }
+.m-app.m-experience .lab-template-row p { color: var(--text-secondary); font: 12px/1.7 var(--font-sans); margin: 0; }
+.m-app.m-experience :is(.lab-template-row,.lab-meta-grid,.json-grid) label { min-width: 0; color: var(--text-secondary); font: 12px var(--font-sans); letter-spacing: 0; gap: 9px; }
+.m-app.m-experience .lab-meta-grid { gap: 12px; margin-bottom: 20px; }
+.m-app.m-experience .lab-modal :is(input,select,textarea) { min-width: 0; max-width: 100%; color: #f5f5f5; background: #080808; border: 1px solid #525252; border-radius: 7px; font-size: 12px; }
+.m-app.m-experience .lab-modal :is(input,select) { height: 40px; padding: 8px 10px; }
+.m-app.m-experience .lab-modal textarea { min-height: 340px; font: 12px/1.65 var(--font-mono); padding: 12px; tab-size: 2; }
+.m-app.m-experience .lab-modal :is(input,select,textarea):focus { border-color: #e6e6e6; outline: 2px solid #e6e6e6; outline-offset: 2px; box-shadow: none; }
+.m-app.m-experience .json-grid { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; }
+.m-app.m-experience .json-grid label:first-child { grid-column: 1 / -1; }
+.m-app.m-experience .json-grid textarea { min-height: 240px; }
+.m-app.m-experience .json-grid label:first-child textarea { min-height: 260px; }
+.m-app.m-experience .lab-modal .lab-run-button { min-height: 44px; font: 600 12px var(--font-sans); color: #080808; background: #f6f6f6; border: 1px solid #ffffff; margin-top: 20px; }
+.m-app.m-experience .lab-modal .lab-run-button:hover:not(:disabled) { color: #080808; background: #ffffff; }
+.m-app.m-experience .lab-error { font-size: 12px; line-height: 1.6; padding: 12px; color: #edb5ae; background: #2b1c1a; border-color: #79544f; }
+.m-app.m-experience .lab-side-heading { font-size: 13px; color: var(--text-primary); border-color: var(--monitor-divider); gap: 10px; flex-wrap: wrap; }
+.m-app.m-experience .lab-side-heading small { color: var(--text-secondary); font: 11px var(--font-sans); }
+.m-app.m-experience .result-empty { min-height: 225px; color: var(--text-secondary); }
+.m-app.m-experience .result-empty p { color: var(--text-secondary); font-size: 12px; line-height: 1.7; }
+.m-app.m-experience .analysis-id { display: block; color: var(--text-secondary); font: 11px var(--font-mono); overflow-wrap: anywhere; }
+.m-app.m-experience .result-score-grid { grid-template-columns: repeat(3,minmax(0,1fr)); gap: 8px; }
+.m-app.m-experience .result-score-grid > div { background: #141414; border-color: var(--monitor-divider); min-width: 0; padding: 12px; }
+.m-app.m-experience .result-score-grid span { font: 11px var(--font-sans); color: var(--text-secondary); }
+.m-app.m-experience .result-score-grid strong { font: 600 26px var(--font-sans); color: #ffffff; }
+.m-app.m-experience .result-verdict { background: #161616; border-color: #454545; border-left-color: var(--status-healthy); }
+.m-app.m-experience .result-verdict.high,
+.m-app.m-experience .result-verdict.critical { background: #241818; border-color: #644541; border-left-color: var(--status-danger); }
+.m-app.m-experience .result-verdict > span { font: 11px var(--font-sans); color: var(--status-warning); }
+.m-app.m-experience .result-verdict strong { font: 600 14px/1.6 var(--font-sans); color: #ffffff; }
+.m-app.m-experience .result-verdict p,
+.m-app.m-experience .analysis-result li { font: 12px/1.8 var(--font-sans); color: var(--text-secondary); overflow-wrap: anywhere; }
+.m-app.m-experience .history-heading { margin-top: 20px; }
+.m-app.m-experience .incident-history .history-row { display: grid; grid-template-columns: 5px minmax(0,1fr) auto; gap: 10px; padding: 13px 0; border-color: var(--monitor-divider); }
+.m-app.m-experience .history-row strong { color: #ffffff; font: 11px var(--font-mono); overflow-wrap: anywhere; }
+.m-app.m-experience .history-row div > span { color: var(--text-secondary); font-size: 12px; line-height: 1.6; }
+.m-app.m-experience .history-row > small { color: var(--text-secondary); font: 11px var(--font-sans); text-transform: capitalize; }
+.m-app.m-experience .history-empty { color: var(--text-secondary); font-size: 12px; }
+@media (max-width: 1119px) {
+  .m-app.m-experience .m-demo-config > div { grid-template-columns: repeat(3,minmax(0,1fr)); }
+  .m-app.m-experience .m-scenario-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .m-app.m-experience .lab-content { grid-template-columns: minmax(0,1fr); }
+  .m-app.m-experience .lab-results-column { border-left: 0; border-top: 1px solid var(--monitor-divider); }
+}
+@media (max-width: 850px) {
+  .m-app.m-experience .json-grid { grid-template-columns: minmax(0,1fr); }
+  .m-app.m-experience .lab-modal textarea { min-height: 240px; }
+  .m-app.m-experience .lab-template-row { grid-template-columns: minmax(0,1fr); }
+}
+@media (max-width: 650px) {
+  .m-app.m-experience .m-demo-guide,
+  .m-app.m-experience .m-demo-config,
+  .m-app.m-experience .m-lab-intro { padding: 18px; }
+  .m-app.m-experience .m-demo-guide ol,
+  .m-app.m-experience .m-demo-config > div,
+  .m-app.m-experience .m-scenario-grid,
+  .m-app.m-experience .m-lab-capabilities { grid-template-columns: minmax(0,1fr); }
+  .m-app.m-experience .m-demo-section-heading { flex-direction: column; gap: 8px; }
+  .m-app.m-experience .m-demo-config :is(button,input),
+  .m-app.m-experience .m-scenario button,
+  .m-app.m-experience .m-lab-intro > button { min-height: 44px; }
+  .m-app.m-experience .lab-backdrop { padding: 8px; }
+  .m-app.m-experience .lab-modal { height: calc(100dvh - 16px); max-height: calc(100dvh - 16px); border-radius: 12px; }
+  .m-app.m-experience .lab-header { padding: 13px; align-items: flex-start; gap: 8px; }
+  .m-app.m-experience .lab-icon { display: none; }
+  .m-app.m-experience .lab-title h2 { font-size: 16px; }
+  .m-app.m-experience .lab-header .icon-button { flex-basis: 44px; min-height: 44px; }
+  .m-app.m-experience .lab-editor-column,
+  .m-app.m-experience .lab-results-column { padding: 14px; }
+  .m-app.m-experience .lab-meta-grid { grid-template-columns: minmax(0,1fr); }
+  .m-app.m-experience .lab-modal :is(input,select) { min-height: 44px; }
+  .m-app.m-experience .history-row > small { grid-column: 2; }
+}
+@media (max-width: 359px) {
+  .m-app.m-experience .m-header .m-connection { max-width: none; white-space: nowrap; padding-inline: 2px; gap: 4px; }
+}
+@media (forced-colors: active) {
+  .m-app.m-experience :is(.m-header,.m-controls,.m-kpis article,.m-scenario.active,.lab-modal) { box-shadow: none; background-image: none; }
+  .m-app.m-experience :is(.lab-header,.lab-icon,.lab-header .icon-button,.lab-modal input,.lab-modal select,.lab-modal textarea,.result-score-grid > div,.result-verdict,.m-notice,.m-scenario-selection) { background: Canvas; color: CanvasText; border-color: ButtonText; }
+  .m-app.m-experience .lab-modal :is(input,select,textarea):focus { outline-color: Highlight; }
+}

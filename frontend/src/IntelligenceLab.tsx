@@ -1,6 +1,7 @@
 import { AlertTriangle, Braces, CheckCircle2, FlaskConical, History, Play, X } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 
+import { useDialogFocus } from "./useDialogFocus";
 import { LAB_TEMPLATES } from "./labTemplates";
 import type { AnalysisRequest, AnalysisResponse, Incident, RawTelemetryEvent, Transaction } from "./types";
 
@@ -27,6 +28,10 @@ function parseArray<T>(label: string, value: string): T[] {
 }
 
 export function IntelligenceLab({ open, incidents, onClose, onAnalyze }: IntelligenceLabProps) {
+  const dialog = useRef<HTMLElement>(null);
+  const titleId = useId();
+  const descriptionId = useId();
+  useDialogFocus(open, dialog, onClose);
   const [templateKey, setTemplateKey] = useState("adaptive_ato");
   const [transactions, setTransactions] = useState("");
   const [baseline, setBaseline] = useState("");
@@ -77,16 +82,16 @@ export function IntelligenceLab({ open, incidents, onClose, onAnalyze }: Intelli
 
   return (
     <div className="lab-backdrop" role="presentation">
-      <section className="lab-modal" role="dialog" aria-modal="true" aria-labelledby="lab-title">
+      <section className="lab-modal" ref={dialog} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby={titleId} aria-describedby={descriptionId}>
         <header className="lab-header">
           <div className="lab-title">
             <span className="lab-icon"><FlaskConical size={21} /></span>
-            <div><span className="eyebrow">DATA-DRIVEN ANALYSIS</span><h2 id="lab-title">ARGUS Intelligence Lab</h2></div>
+            <div><span className="eyebrow">DATA-DRIVEN ANALYSIS</span><h2 id={titleId}>ARGUS Intelligence Lab</h2><p id={descriptionId}>Prepare JSON inputs, run analysis, and inspect the returned evidence. Escape closes this dialog.</p></div>
           </div>
           <button className="icon-button" onClick={onClose} aria-label="Close intelligence lab"><X size={17} /></button>
         </header>
 
-        <div className="lab-content">
+        <div className="lab-content" aria-busy={busy}>
           <div className="lab-editor-column">
             <div className="lab-template-row">
               <label>
@@ -110,7 +115,7 @@ export function IntelligenceLab({ open, incidents, onClose, onAnalyze }: Intelli
               <label><span><Braces size={14} /> Raw host telemetry</span><textarea spellCheck={false} value={telemetry} onChange={(event) => setTelemetry(event.target.value)} /></label>
             </div>
 
-            {error && <div className="lab-error"><AlertTriangle size={15} /> {error}</div>}
+            {error && <div className="lab-error" role="alert"><AlertTriangle size={15} /> {error}</div>}
             <button className="lab-run-button" onClick={() => void run()} disabled={busy}>
               <Play size={16} fill="currentColor" /> {busy ? "ANALYZING ACROSS DETECTORS…" : "RUN CROSS-DOMAIN ANALYSIS"}
             </button>
@@ -119,7 +124,7 @@ export function IntelligenceLab({ open, incidents, onClose, onAnalyze }: Intelli
           <aside className="lab-results-column">
             <div className="lab-side-heading"><span><CheckCircle2 size={16} /> Analysis result</span><small>Content-derived · persisted</small></div>
             {result ? (
-              <div className="analysis-result">
+              <div className="analysis-result" role="status" aria-live="polite">
                 <span className="analysis-id">{result.analysis_id}</span>
                 <div className="result-score-grid">
                   <div><span>Financial risk</span><strong>{Math.round(result.graph_signal.risk_score * 100)}</strong></div>
@@ -137,7 +142,7 @@ export function IntelligenceLab({ open, incidents, onClose, onAnalyze }: Intelli
               <div className="result-empty"><FlaskConical size={30} /><p>Run any JSON dataset to generate a fresh graph signal, infrastructure signal, and correlated verdict.</p></div>
             )}
 
-            <div className="lab-side-heading history-heading"><span><History size={16} /> Persistent incident history</span><small>{incidents.length} shown</small></div>
+            <div className="lab-side-heading history-heading"><span><History size={16} /> Persistent incident history</span><small>Latest {Math.min(incidents.length, 6)} of {incidents.length} loaded</small></div>
             <div className="incident-history">
               {incidents.length ? incidents.slice(0, 6).map((entry) => (
                 <div className="history-row" key={entry.incident_id}>
