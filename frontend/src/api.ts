@@ -80,6 +80,7 @@ export interface TransactionSource {
     transaction: import("./types").Transaction,
     session: string,
     signal?: AbortSignal,
+    scenario?: string,
   ): Promise<{ transaction: import("./types").Transaction }>;
 }
 export const syntheticSource: TransactionSource = {
@@ -97,9 +98,10 @@ export const syntheticSource: TransactionSource = {
     transaction: import("./types").Transaction,
     session: string,
     signal?: AbortSignal,
+    scenario?: string,
   ) {
     return request<{ transaction: import("./types").Transaction }>(
-      `/api/transactions?session_id=${encodeURIComponent(session)}`,
+      `/api/transactions?session_id=${encodeURIComponent(session)}${scenario ? `&scenario_id=${encodeURIComponent(scenario)}` : ""}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -109,3 +111,26 @@ export const syntheticSource: TransactionSource = {
     );
   },
 };
+
+export function loadFinancialInvestigations(): Promise<
+  import("./types").FinancialInvestigation[]
+> {
+  return request("/api/financial-investigations?limit=50");
+}
+export function loadTransactionContext(
+  id: string,
+): Promise<import("./types").InvestigationContext> {
+  return request(`/api/transactions/${encodeURIComponent(id)}/context`);
+}
+export function loadFinancialContext(
+  id: string,
+): Promise<import("./types").InvestigationContext> {
+  return request(
+    `/api/financial-investigations/${encodeURIComponent(id)}/context`,
+  );
+}
+export function loadIncidentContext(
+  id: string,
+): Promise<import("./types").InvestigationContext> {
+  return request(`/api/incidents/${encodeURIComponent(id)}/context`);
+}

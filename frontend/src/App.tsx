@@ -25,8 +25,18 @@ import {
   loadAuditEvents,
   loadDetectorStatus,
   loadIncidents,
+  loadFinancialInvestigations,
+  loadTransactionContext,
+  loadFinancialContext,
+  loadIncidentContext,
 } from "./api";
-import { detectionLabel, neighborhood, type Alert } from "./monitoring";
+import {
+  contextState,
+  detectionLabel,
+  neighborhood,
+  type Alert,
+  type MonitorState,
+} from "./monitoring";
 import {
   DATA_SOURCES,
   SCENARIOS,
@@ -35,7 +45,12 @@ import {
 } from "./simulation";
 import { useMonitoring } from "./useMonitoring";
 import { MoneyGraph } from "./MoneyGraph";
-import type { AuditEvent, DetectorStatus, Incident } from "./types";
+import type {
+  AuditEvent,
+  DetectorStatus,
+  Incident,
+  FinancialInvestigation,
+} from "./types";
 export { detectorSourceLabel } from "./CanonicalDemo";
 
 type Page =
@@ -83,7 +98,7 @@ const EMPTY: string[] = [];
 export default function App() {
   const [page, setPage] = useState<Page>("Overview");
   const [config, setConfig] = useState<RunConfig>(() => newConfig());
-  const [running, setRunning] = useState(true);
+  const [running, setRunning] = useState(false);
   const [speed, setSpeed] = useState(2);
   const [seed, setSeed] = useState(42017);
   const [count, setCount] = useState(400);
@@ -97,6 +112,32 @@ export default function App() {
   const [status, setStatus] = useState<DetectorStatus | null>(null);
   const [incidents, setIncidents] = useState<Incident[]>([]);
   const [caseError, setCaseError] = useState("");
+  const [financialCases, setFinancialCases] = useState<
+    FinancialInvestigation[]
+  >([]);
+  const [selectedAlert, setSelectedAlert] = useState<Alert | null>(null);
+  const [openedCase, setOpenedCase] = useState<FinancialInvestigation | null>(
+    null,
+  );
+  const [inspection, setInspection] = useState<MonitorState | null>(null);
+  const [selectionError, setSelectionError] = useState("");
+  const [selectionLoading, setSelectionLoading] = useState(false);
+  const selectionRequest = useRef(0);
+  const refreshingCases = useRef(false);
+  const refreshCases = useCallback(() => {
+    if (refreshingCases.current) return;
+    refreshingCases.current = true;
+    void Promise.all([loadIncidents(50), loadFinancialInvestigations()])
+      .then(([historical, financial]) => {
+        setIncidents(historical);
+        setFinancialCases(financial);
+        setCaseError("");
+      })
+      .catch(() => setCaseError("Persisted investigations unavailable."))
+      .finally(() => {
+        refreshingCases.current = false;
+      });
+  }, []);
   const [audit, setAudit] = useState<Record<string, AuditEvent[]>>({});
   const [canonical, setCanonical] = useState(false);
   const [labOpen, setLabOpen] = useState(false);
@@ -107,33 +148,40 @@ export default function App() {
     running,
     speed,
     complete,
+    refreshCases,
   );
   const refresh = useCallback(() => {
     void loadDetectorStatus()
       .then(setStatus)
       .catch(() => setStatus(null));
-    void loadIncidents(50)
-      .then((value) => {
-        setIncidents(value);
-        setCaseError("");
-      })
-      .catch(() => setCaseError("Persisted investigations unavailable."));
-  }, []);
+    refreshCases();
+  }, [refreshCases]);
   useEffect(() => {
     refresh();
-    const timer = setInterval(refresh, 30000);
-    return () => clearInterval(timer);
-  }, [refresh]);
-  const transactions = useMemo(
-    () =>
-      Object.values(state.transactions).sort((a, b) =>
-        b.timestamp.localeCompare(a.timestamp),
-      ),
+    const healthTimer = setInterval(refresh, 30000);
+    const caseTimer = setInterval(refreshCases, 15000);
+    return () => {
+      clearInterval(healthTimer);
+      clearInterval(caseTimer);
+    };
+  }, [refresh, refreshCases]);
+  const runTransactions = useMemo(
+    () => Object.values(state.transactions),
     [state.transactions],
   );
-  const selected = selectedId ? state.transactions[selectedId] : transactions[0];
+  const displayedState = inspection ?? state;
+  const transactions = useMemo(
+    () =>
+      Object.values(displayedState.transactions).sort((a, b) =>
+        b.timestamp.localeCompare(a.timestamp),
+      ),
+    [displayedState.transactions],
+  );
+  const selected = selectedId
+    ? displayedState.transactions[selectedId]
+    : transactions[0];
   const detection = selected
-    ? state.detections[selected.transaction_id]
+    ? displayedState.detections[selected.transaction_id]
     : undefined;
   const truth = useMemo(
     () =>
@@ -165,15 +213,98 @@ export default function App() {
     return next;
   }, [transactions, selected]);
   const suspicious = detection?.suspiciousAccounts ?? EMPTY;
-  const choose = useCallback((id: string) => {
-    setSelectedId(id);
+  const inspect = useCallback(
+    async (id: string) => {
+      const request = ++selectionRequest.current;
+      setSelectedId(id);
+      setAccount("");
+      setSelectionError("");
+      setSelectionLoading(false);
+      setQuery("");
+      setFilter("all");
+      setSort("newest");
+      setTablePage(0);
+      if (displayedState.transactions[id]) return;
+      if (state.transactions[id]) {
+        setInspection(null);
+        return;
+      }
+      setSelectionLoading(true);
+      try {
+        const context = await loadTransactionContext(id);
+        if (selectionRequest.current === request)
+          setInspection(contextState(context));
+      } catch (reason) {
+        if (selectionRequest.current === request)
+          setSelectionError(
+            `Transaction unavailable: ${reason instanceof Error ? reason.message : String(reason)}`,
+          );
+      } finally {
+        if (selectionRequest.current === request) setSelectionLoading(false);
+      }
+    },
+    [displayedState.transactions, state.transactions],
+  );
+  const choose = useCallback(
+    (id: string) => {
+      setSelectedAlert(null);
+      void inspect(id);
+    },
+    [inspect],
+  );
+  async function openCase(financial: FinancialInvestigation | Incident) {
+    const request = ++selectionRequest.current;
+    setOpenedCase("case_id" in financial ? financial : null);
+    setSelectedAlert(null);
+    setSelectedId("loading-case");
+    setInspection(null);
     setAccount("");
-  }, []);
+    setSelectionError("");
+    setSelectionLoading(true);
+    setPage("Transactions");
+    setQuery("");
+    setFilter("all");
+    setSort("newest");
+    setTablePage(0);
+    try {
+      const context =
+        "case_id" in financial
+          ? await loadFinancialContext(financial.case_id)
+          : await loadIncidentContext(financial.incident_id);
+      if (selectionRequest.current !== request) return;
+      const loaded = contextState(context);
+      setInspection(loaded);
+      setSelectedId(context.transactions.at(-1)?.transaction_id ?? "");
+      if (!context.transactions.length)
+        setSelectionError(
+          "This historical case has no available payment records. Its stored evidence remains in Investigations.",
+        );
+    } catch (reason) {
+      if (selectionRequest.current === request)
+        setSelectionError(
+          `Investigation context unavailable: ${String(reason)}`,
+        );
+    } finally {
+      if (selectionRequest.current === request) setSelectionLoading(false);
+    }
+  }
+  function returnToRun() {
+    selectionRequest.current++;
+    setInspection(null);
+    setOpenedCase(null);
+    setSelectedAlert(null);
+    setSelectedId("");
+    setSelectionError("");
+    setSelectionLoading(false);
+    setAccount("");
+  }
   const filtered = useMemo(
     () =>
       transactions
         .filter((t) => {
-          const label = detectionLabel(state.detections[t.transaction_id]);
+          const label = detectionLabel(
+            displayedState.detections[t.transaction_id],
+          );
           return (
             `${t.transaction_id} ${t.source_account} ${t.destination_account} ${truth.get(t.transaction_id)?.category}`
               .toLowerCase()
@@ -188,16 +319,22 @@ export default function App() {
               ? a.timestamp.localeCompare(b.timestamp)
               : b.timestamp.localeCompare(a.timestamp),
         ),
-    [transactions, state.detections, query, filter, sort, truth],
+    [transactions, displayedState.detections, query, filter, sort, truth],
   );
   const shown = filtered.slice(tablePage * 12, tablePage * 12 + 12);
+  useEffect(() => {
+    if (!selectedId) return;
+    const index = filtered.findIndex((t) => t.transaction_id === selectedId);
+    if (index >= 0) setTablePage(Math.floor(index / 12));
+  }, [selectedId, filtered]);
   useEffect(() => setTablePage(0), [query, filter, sort, config]);
-  const flagged = transactions.filter(
+  const flagged = runTransactions.filter(
     (t) => detectionLabel(state.detections[t.transaction_id]) === "Flagged",
   ).length;
   const scenario = SCENARIOS.find((s) => s.id === config.scenario)!;
   function reset(scenarioId = config.scenario, randomize = false) {
     setRunning(false);
+    returnToRun();
     setSelectedId("");
     setAccount("");
     const nextSeed = randomize
@@ -213,10 +350,13 @@ export default function App() {
     return (
       <button
         key={item.id}
-        className={`m-alert ${selected?.transaction_id === item.transactionId ? "active" : ""}`}
+        className={`m-alert ${selectedAlert?.id === item.id ? "active" : ""}`}
+        aria-pressed={selectedAlert?.id === item.id}
         onClick={() => {
-          choose(item.transactionId);
-          if (page === "Alerts") setPage("Overview");
+          setSelectedAlert(item);
+          setOpenedCase(null);
+          void inspect(item.transactionId);
+          setPage("Overview");
         }}
       >
         <span className={`m-alert-dot ${item.severity}`} />
@@ -241,11 +381,15 @@ export default function App() {
               : "Live transactions"}{" "}
             <span className="m-count">{transactions.length}</span>
           </h2>
-          <p>Current synthetic run · latest 1,000 records retained</p>
+          <p>
+            {inspection
+              ? "Historical investigation context · bounded retrieved records"
+              : "Current synthetic run · latest 1,000 records retained"}
+          </p>
         </div>
         <span className="m-pill">
           <i className={running ? "m-dot" : ""} />
-          {running ? "Streaming" : "Paused"}
+          {running ? "Streaming" : cursor >= config.count ? "Complete" : cursor ? "Paused" : "Ready"}
         </span>
       </div>
       <div className="m-filters">
@@ -306,7 +450,7 @@ export default function App() {
           </thead>
           <tbody>
             {shown.map((t) => {
-              const d = state.detections[t.transaction_id];
+              const d = displayedState.detections[t.transaction_id];
               const label = detectionLabel(d);
               const alert = alerts.find(
                 (a) => a.transactionId === t.transaction_id,
@@ -422,6 +566,57 @@ export default function App() {
         </div>
         <Shield size={17} />
       </div>
+      {selectedAlert && (
+        <div className="m-account" aria-label="Selected alert evidence">
+          <h3>
+            {selectedAlert.type} · {selectedAlert.severity}
+          </h3>
+          <p className="m-mono">
+            {selectedAlert.id} · {selectedAlert.transactionId}
+          </p>
+          <p>
+            {selectedAlert.timestamp} · Graph {risk(selectedAlert.graph)} · Scam{" "}
+            {risk(selectedAlert.scam)} · Combined {risk(selectedAlert.combined)}
+          </p>
+          <p>{selectedAlert.message}</p>
+          <ul className="m-evidence">
+            {selectedAlert.evidence.map((e) => (
+              <li key={e}>{e}</li>
+            ))}
+          </ul>
+          <button onClick={() => setPage("Alerts")}>Back to alerts</button>
+        </div>
+      )}
+      {openedCase && (
+        <div className="m-account">
+          <h3>
+            {openedCase.case_id} · {openedCase.severity}
+          </h3>
+          <p>
+            {openedCase.source} · {openedCase.session_id} ·{" "}
+            {openedCase.scenario_id ?? "Unspecified scenario"}
+          </p>
+          <p>{openedCase.summary}</p>
+          <ul className="m-evidence">
+            {openedCase.evidence.slice(-12).map((e) => (
+              <li key={e}>{e}</li>
+            ))}
+          </ul>
+          <button onClick={() => setPage("Investigations")}>
+            Back to investigations
+          </button>
+        </div>
+      )}
+      {selectionLoading && (
+        <p className="m-muted" role="status">
+          Loading persisted transaction context…
+        </p>
+      )}
+      {selectionError && (
+        <p className="m-muted" role="alert">
+          {selectionError}
+        </p>
+      )}
       {selected ? (
         <>
           <div className="m-detail-amount">
@@ -454,8 +649,19 @@ export default function App() {
             <dt>Detection status</dt>
             <dd>{detectionLabel(detection)}</dd>
             <dt>Risk severity</dt>
-            <dd>{alerts.find(a => a.transactionId === selected.transaction_id)?.severity ?? (detection?.combined === undefined ? "Unavailable" : detection.combined >= 70 ? "High" : detection.combined >= 40 ? "Moderate" : "Low")}</dd>
-            <dt>Detector decision</dt><dd>{detection?.decision || "Unavailable"}</dd>
+            <dd>
+              {alerts.find((a) => a.transactionId === selected.transaction_id)
+                ?.severity ??
+                (detection?.combined === undefined
+                  ? "Unavailable"
+                  : detection.combined >= 70
+                    ? "High"
+                    : detection.combined >= 40
+                      ? "Moderate"
+                      : "Low")}
+            </dd>
+            <dt>Detector decision</dt>
+            <dd>{detection?.decision || "Unavailable"}</dd>
             <dt>Analyst action</dt>
             <dd>None recorded</dd>
             <dt>Synthetic truth</dt>
@@ -481,7 +687,11 @@ export default function App() {
             ))}
           </div>
           <p className="m-score-note">
-            Scores are detector outputs, not calibrated probabilities. Graph risk describes the rolling session window (0–1 normalized to 100), not an individual payment. A graph flag requires this transaction in the detector’s suspicious transaction list. Specialist scores use 0–100.
+            Scores are detector outputs, not calibrated probabilities. Graph
+            risk describes the rolling session window (0–1 normalized to 100),
+            not an individual payment. A graph flag requires this transaction in
+            the detector’s suspicious transaction list. Specialist scores use
+            0–100.
           </p>
           <h3>Evidence</h3>
           {[
@@ -669,18 +879,30 @@ export default function App() {
               <button onClick={refresh}>Retry health check</button>
             </div>
           )}
+          {(inspection || openedCase || selectionError) && (
+            <div className="m-notice">
+              <span>
+                {inspection
+                  ? "Viewing stored investigation context. Live run controls remain separate."
+                  : selectionError || "Loading investigation context"}
+              </span>
+              <button onClick={returnToRun}>Return to live run</button>
+            </div>
+          )}
           <section className="m-controls">
             <div>
               <span className={`m-status ${running ? "completed" : "pending"}`}>
                 {running
                   ? "Running"
-                  : cursor >= records.length
+                  : cursor >= config.count
                     ? "Complete"
-                    : "Paused"}
+                    : cursor
+                      ? "Paused"
+                      : "Ready"}
               </span>
               <strong>{scenario.name}</strong>
               <span className="m-muted">
-                Seed {config.seed} · {cursor}/{records.length} submitted
+                Seed {config.seed} · {cursor}/{config.count} submitted
               </span>
             </div>
             <div>
@@ -699,7 +921,7 @@ export default function App() {
               </button>
               <button
                 className="m-primary"
-                disabled={cursor >= records.length}
+                disabled={cursor >= config.count}
                 onClick={() => setRunning((v) => !v)}
               >
                 {running ? <Pause size={14} /> : <Play size={14} />}{" "}
@@ -811,12 +1033,56 @@ export default function App() {
                 <div>
                   <h2>Persisted investigation cases</h2>
                   <p>
-                    Backend cases across saved analyses · stream alerts remain
-                    separate
+                    Persisted financial investigations and historical
+                    cross-domain cases
                   </p>
                 </div>
                 <button onClick={refresh}>Refresh</button>
               </div>
+              {financialCases.map((financial) => (
+                <article key={financial.case_id}>
+                  <div>
+                    <span
+                      className={`m-status ${financial.severity === "critical" ? "cancelled" : "pending"}`}
+                    >
+                      {financial.severity}
+                    </span>
+                    <span className="m-mono">{financial.case_id}</span>
+                    <span className="m-muted">{financial.status}</span>
+                  </div>
+                  <h3>
+                    {financial.source} ·{" "}
+                    {financial.scenario_id ?? "Financial investigation"}
+                  </h3>
+                  <p>{financial.summary}</p>
+                  <p>Session: {financial.session_id}</p>
+                  <p>
+                    Created: {financial.created_at} · Updated:{" "}
+                    {financial.updated_at}
+                  </p>
+                  <p>Accounts: {financial.accounts.join(", ")}</p>
+                  <p>
+                    Transactions:{" "}
+                    {financial.transaction_ids.slice(-20).join(", ")}
+                    {financial.transaction_ids.length > 20
+                      ? ` · ${financial.transaction_ids.length} total`
+                      : ""}
+                  </p>
+                  <p>
+                    {Object.entries(financial.risk_scores)
+                      .map(([name, value]) => `${name}: ${risk(value)}`)
+                      .join(" · ")}
+                  </p>
+                  <ul>
+                    {financial.evidence.slice(-12).map((e) => (
+                      <li key={e}>{e}</li>
+                    ))}
+                  </ul>
+                  <button onClick={() => void openCase(financial)}>
+                    Open financial investigation
+                  </button>
+                </article>
+              ))}
               {incidents.length ? (
                 incidents.map((incident) => (
                   <article key={incident.incident_id}>
@@ -830,6 +1096,15 @@ export default function App() {
                       <span className="m-muted">{incident.status}</span>
                     </div>
                     <h3>{incident.verdict.replaceAll("_", " ")}</h3>
+                    <p>
+                      {incident.incident_id === "INC-001"
+                        ? "Canonical Demo"
+                        : "Historical cross-domain / Data Lab"}{" "}
+                      · Created: {incident.timestamp}
+                    </p>
+                    <button onClick={() => void openCase(incident)}>
+                      Open historical investigation
+                    </button>
                     <p>{incident.summary}</p>
                     <ul>
                       {incident.evidence.map((e) => (
@@ -883,17 +1158,18 @@ export default function App() {
                     ))}
                   </article>
                 ))
-              ) : (
+              ) : !financialCases.length ? (
                 <div className="m-empty">
                   <Network size={26} />
                   <h3>No persisted cases available</h3>
                   <p>
-                    Transaction scoring produces alerts. A persisted case
-                    requires the existing financial and infrastructure
-                    correlation workflow in the Canonical Demo or Lab.
+                    Financial cases require at least two connected completed
+                    payments with qualifying detector evidence in one session
+                    within 15 minutes. Historical Canonical Demo and Lab cases
+                    also appear here.
                   </p>
                 </div>
-              )}
+              ) : null}
             </section>
           ) : page === "Lab" ? (
             <section className="m-panel m-lab-intro">
@@ -913,7 +1189,7 @@ export default function App() {
                 {[
                   [
                     "Transactions monitored",
-                    transactions.length,
+                    runTransactions.length,
                     "Current run · retained history",
                     Wallet,
                   ],
@@ -938,8 +1214,10 @@ export default function App() {
                             (i.severity === "high" ||
                               i.severity === "critical") &&
                             i.status !== "contained",
-                        ).length,
-                    "Saved cases · latest 50",
+                        ).length +
+                        financialCases.filter((c) => c.status === "open")
+                          .length,
+                    "Each case source · latest 50",
                     Network,
                   ],
                   [

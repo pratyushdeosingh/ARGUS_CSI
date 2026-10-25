@@ -220,3 +220,24 @@ class TransactionScoreResponse(StrictModel):
     reasons: list[str] = Field(default_factory=list)
     explanation: str
 
+
+
+class FinancialInvestigation(StrictModel):
+    """Financial-only evidence; never implies infrastructure compromise or containment."""
+    case_id: str
+    source: Literal["Synthetic Stream", "Transaction Stream"]
+    session_id: str
+    scenario_id: str | None = None
+    created_at: datetime
+    updated_at: datetime
+    last_activity_at: datetime
+    severity: Literal["high", "critical"]
+    status: Literal["open", "merged"] = "open"
+    summary: str
+    transaction_ids: list[str]
+    accounts: list[str]
+    risk_scores: dict[str, float]
+    evidence: list[str]
+    signal_ids: list[str]
+    policy_version: str = "financial-connected-v1"
+    merged_into: str | None = None

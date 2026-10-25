@@ -26,6 +26,9 @@ export interface Alert {
   timestamp: string;
   message: string;
   evidence: string[];
+  graph?: number;
+  scam?: number;
+  combined?: number;
 }
 export interface MonitorState {
   transactions: Record<string, Transaction>;
@@ -139,6 +142,15 @@ export function applyEvent(
         timestamp: event.timestamp,
         message: String(data.message ?? data.error ?? ""),
         evidence: strings(data.supporting_evidence),
+        graph:
+          event.event_type === "alert.created"
+            ? score(data.risk_score, 1)
+            : undefined,
+        scam: score(data.scam_score, 100),
+        combined:
+          event.event_type === "scam_alert.created"
+            ? score(data.risk_score, 100)
+            : undefined,
       },
     };
     next.alerts = Object.fromEntries(Object.entries(next.alerts).slice(-500));
@@ -200,4 +212,19 @@ export function neighborhood(
           Math.abs(Date.parse(b.timestamp) - Date.parse(selected.timestamp)),
       ),
   ].slice(0, 28);
+}
+
+export function contextState(
+  context: import("./types").InvestigationContext,
+): MonitorState {
+  let state = emptyMonitor();
+  for (const tx of context.transactions)
+    state = applyEvent(state, {
+      event_id: `context:${tx.transaction_id}`,
+      event_type: "transaction.received",
+      timestamp: tx.timestamp,
+      data: { ...tx },
+    });
+  for (const event of context.events) state = applyEvent(state, event);
+  return state;
 }

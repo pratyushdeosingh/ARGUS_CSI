@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+from hashlib import sha256
 import json
 import os
 from pathlib import Path
@@ -12,6 +13,7 @@ from threading import RLock
 from .models import (
     AuditEvent,
     GraphSignal,
+    FinancialInvestigation,
     Incident,
     IngestionStatus,
     PlatformMetrics,
@@ -67,6 +69,17 @@ class ArgusStore:
                 CREATE INDEX IF NOT EXISTS ix_transactions_timestamp_id
                     ON transaction_events(timestamp DESC, transaction_id DESC);
 
+                CREATE TABLE IF NOT EXISTS financial_findings (
+                    session_id TEXT NOT NULL, transaction_id TEXT NOT NULL,
+                    timestamp TEXT NOT NULL, payload TEXT NOT NULL,
+                    PRIMARY KEY(session_id, transaction_id)
+                );
+                CREATE INDEX IF NOT EXISTS ix_findings_time ON financial_findings(session_id, timestamp);
+                CREATE TABLE IF NOT EXISTS financial_investigations (
+                    case_id TEXT PRIMARY KEY, session_id TEXT NOT NULL,
+                    updated_at TEXT NOT NULL, status TEXT NOT NULL, payload TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS ix_financial_cases_session ON financial_investigations(session_id);
                 CREATE TABLE IF NOT EXISTS stream_events (
                     event_id TEXT PRIMARY KEY, session_id TEXT NOT NULL,
                     payload TEXT NOT NULL
@@ -424,6 +437,175 @@ class ArgusStore:
                 (session_id, limit),
             ).fetchall()
         return [json.loads(row["payload"]) for row in reversed(rows)]
+
+
+    def record_financial_finding(self, session_id: str, scenario_id: str | None,
+                                 finding: dict) -> tuple[FinancialInvestigation | None, bool]:
+        """Atomic, idempotent admission/connected-component upsert; retain merge aliases."""
+        timestamp = datetime.fromisoformat(finding['timestamp'])
+        cutoff = timestamp - timedelta(minutes=15)
+        with self._lock, self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            connection.execute(
+                "INSERT OR IGNORE INTO financial_findings VALUES (?, ?, ?, ?)",
+                (session_id, finding['transaction_id'], finding['timestamp'], json.dumps(finding)),
+            )
+            rows = connection.execute(
+                "SELECT payload FROM financial_findings WHERE session_id = ? "
+                "AND julianday(timestamp) BETWEEN julianday(?) AND julianday(?) "
+                "ORDER BY julianday(timestamp) DESC LIMIT 500",
+                (session_id, cutoff.isoformat(), (timestamp + timedelta(minutes=15)).isoformat()),
+            ).fetchall()
+            findings = [json.loads(row['payload']) for row in rows]
+            connected = {finding['transaction_id']}
+            accounts = set(finding['accounts'])
+            admitted_times = [timestamp]
+            # Connected components contain qualifying evidence only, not all payments.
+            for _ in range(len(findings)):
+                additions = [f for f in findings if f['transaction_id'] not in connected and accounts.intersection(f['accounts'])]
+                if not additions:
+                    break
+                previous_count = len(connected)
+                for item in additions:
+                    item_time = datetime.fromisoformat(item['timestamp'])
+                    if max(*admitted_times, item_time) - min(*admitted_times, item_time) > timedelta(minutes=15):
+                        continue
+                    connected.add(item['transaction_id'])
+                    admitted_times.append(item_time)
+                    accounts.update(item['accounts'])
+                if len(connected) == previous_count:
+                    break
+            if len(connected) < 2:
+                return None, False
+            related = [f for f in findings if f['transaction_id'] in connected]
+            case_rows = connection.execute(
+                "SELECT payload FROM financial_investigations WHERE session_id = ? AND status = 'open'",
+                (session_id,),
+            ).fetchall()
+            existing = sorted(
+                (FinancialInvestigation.model_validate_json(row['payload']) for row in case_rows),
+                key=lambda case: (case.created_at, case.case_id),
+            )
+            matches = [case for case in existing if connected.intersection(case.transaction_ids)
+                       and cutoff <= case.last_activity_at <= timestamp + timedelta(minutes=15)]
+            scores = {}
+            evidence = []
+            signals = set()
+            for case in matches:
+                connected.update(case.transaction_ids)
+                accounts.update(case.accounts)
+                evidence.extend(case.evidence)
+                signals.update(case.signal_ids)
+                for name, value in case.risk_scores.items():
+                    scores[name] = max(scores.get(name, 0), value)
+            for item in related:
+                evidence.extend(item['evidence'])
+                signals.update(item['signal_ids'])
+                for name, value in item['risk_scores'].items():
+                    scores[name] = max(scores.get(name, 0), value)
+            now = datetime.now(timezone.utc)
+            case_id = matches[0].case_id if matches else 'FIN-' + sha256(
+                (session_id + '|' + '|'.join(sorted(connected))).encode()).hexdigest()[:16].upper()
+            case = FinancialInvestigation(
+                case_id=case_id, source='Synthetic Stream' if scenario_id else 'Transaction Stream',
+                session_id=session_id, scenario_id=scenario_id,
+                created_at=matches[0].created_at if matches else now, updated_at=now,
+                last_activity_at=max([*admitted_times, *[c.last_activity_at for c in matches]]),
+                severity='critical' if max(scores.values(), default=0) >= 85 else 'high',
+                summary=f"Connected financial detector evidence across {len(connected)} completed payments and {len(accounts)} accounts.",
+                transaction_ids=sorted(connected), accounts=sorted(accounts), risk_scores=scores,
+                evidence=list(dict.fromkeys(evidence))[-100:], signal_ids=sorted(signals),
+            )
+            if matches and case.model_copy(update={'updated_at': matches[0].updated_at}) == matches[0] and len(matches) == 1:
+                return matches[0], False
+            def save(value):
+                connection.execute(
+                    "INSERT INTO financial_investigations VALUES (?, ?, ?, ?, ?) "
+                    "ON CONFLICT(case_id) DO UPDATE SET updated_at=excluded.updated_at, status=excluded.status, payload=excluded.payload",
+                    (value.case_id, session_id, value.updated_at.isoformat(), value.status, value.model_dump_json()),
+                )
+            save(case)
+            for prior in matches[1:]:
+                save(prior.model_copy(update={'status': 'merged', 'merged_into': case_id, 'updated_at': now}))
+            return case, True
+
+    def list_financial_investigations(self, limit: int = 50, session_id: str | None = None) -> list[FinancialInvestigation]:
+        with self._lock, self._connect() as connection:
+            rows = connection.execute(
+                "SELECT payload FROM financial_investigations WHERE status != 'merged' "
+                + ("AND session_id = ? " if session_id else "") + "ORDER BY updated_at DESC LIMIT ?",
+                (session_id, limit) if session_id else (limit,),
+            ).fetchall()
+        return [FinancialInvestigation.model_validate_json(row['payload']) for row in rows]
+
+    def get_financial_investigation(self, case_id: str) -> FinancialInvestigation | None:
+        with self._lock, self._connect() as connection:
+            # Merge aliases remain addressable after two connected cases are joined.
+            for _ in range(100):
+                row = connection.execute("SELECT payload FROM financial_investigations WHERE case_id = ?", (case_id,)).fetchone()
+                if not row:
+                    return None
+                case = FinancialInvestigation.model_validate_json(row['payload'])
+                if not case.merged_into:
+                    return case
+                case_id = case.merged_into
+        return None
+
+    def incident_context(self, incident_id: str) -> dict | None:
+        case = self.get_incident(incident_id)
+        if case is None:
+            return None
+        with self._lock, self._connect() as connection:
+            row = connection.execute("SELECT payload FROM detector_signals WHERE signal_id = ?", (case.financial_signal_id,)).fetchone()
+            signal = GraphSignal.model_validate_json(row['payload']) if row else None
+            ids = signal.suspicious_transactions[:200] if signal else []
+            transactions = []
+            for transaction_id in ids:
+                tx_row = connection.execute("SELECT payload FROM transaction_events WHERE transaction_id = ?", (transaction_id,)).fetchone()
+                if tx_row:
+                    transactions.append(json.loads(tx_row['payload']))
+        events = []
+        if signal:
+            for tx in transactions:
+                events.append(dict(event_id=f"stored:{signal.signal_id}:{tx['transaction_id']}",
+                                   event_type='transaction.scored', timestamp=signal.timestamp.isoformat(),
+                                   data={**signal.model_dump(mode='json'), 'transaction_id': tx['transaction_id']}))
+        return dict(session_id=f"historical:{incident_id}", transactions=transactions, events=events)
+
+    def transaction_context(self, transaction_id: str) -> dict | None:
+        with self._lock, self._connect() as connection:
+            row = connection.execute("SELECT payload, batch_id FROM transaction_events WHERE transaction_id = ?", (transaction_id,)).fetchone()
+        if not row:
+            return None
+        selected = Transaction.model_validate_json(row['payload'])
+        nearby = self.get_recent_transactions_window(selected.timestamp + timedelta(minutes=15), 30, 200, row['batch_id'])
+        accounts = {selected.source_account, selected.destination_account}
+        related = {selected.transaction_id: selected}
+        for _ in range(3):
+            additions = [tx for tx in nearby if accounts.intersection([tx.source_account, tx.destination_account])]
+            for tx in additions:
+                related[tx.transaction_id] = tx
+                accounts.update([tx.source_account, tx.destination_account])
+        ids = [selected.transaction_id, *[key for key in related if key != selected.transaction_id]][:80]
+        return self.investigation_context(row['batch_id'], ids)
+
+    def investigation_context(self, session_id: str, ids: list[str]) -> dict:
+        # Explicit IDs avoid global history limits hiding older alert/case payments.
+        ids = ids[:200]
+        if not ids:
+            return dict(session_id=session_id, transactions=[], events=[])
+        placeholders = ','.join('?' for _ in ids)
+        with self._lock, self._connect() as connection:
+            rows = connection.execute(
+                f"SELECT payload FROM transaction_events WHERE batch_id = ? AND transaction_id IN ({placeholders})",
+                (session_id, *ids),
+            ).fetchall()
+            events = connection.execute(
+                f"SELECT payload FROM stream_events WHERE session_id = ? AND json_extract(payload, '$.data.transaction_id') IN ({placeholders}) ORDER BY rowid DESC LIMIT 2000",
+                (session_id, *ids),
+            ).fetchall()
+        return dict(session_id=session_id, transactions=[json.loads(row['payload']) for row in rows],
+                    events=[json.loads(row['payload']) for row in reversed(events)])
 
 
 argus_store = ArgusStore()

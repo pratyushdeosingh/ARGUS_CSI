@@ -143,3 +143,28 @@ export interface PlatformMetrics {
   average_confidence: number;
   severity_counts: Record<string, number>;
 }
+
+export interface FinancialInvestigation {
+  case_id: string;
+  source: "Synthetic Stream" | "Transaction Stream";
+  session_id: string;
+  scenario_id: string | null;
+  created_at: string;
+  updated_at: string;
+  last_activity_at: string;
+  severity: "high" | "critical";
+  status: "open" | "merged";
+  summary: string;
+  transaction_ids: string[];
+  accounts: string[];
+  risk_scores: Record<string, number>;
+  evidence: string[];
+  signal_ids: string[];
+  policy_version: string;
+  merged_into: string | null;
+}
+export interface InvestigationContext {
+  session_id: string;
+  transactions: Transaction[];
+  events: import("./monitoring").StreamEvent[];
+}
