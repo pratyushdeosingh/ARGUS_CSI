@@ -43,7 +43,7 @@ class TGNN(nn.Module):
         # 4. Final output layer to compute node risk score
         self.risk_fc = nn.Linear(hidden_dim, 1)
 
-    def forward(self, transactions: list[Transaction]) -> tuple[torch.Tensor, dict[str, float]]:
+    def forward(self, transactions: list[Transaction], feature_mask: list[float] | None = None) -> tuple[torch.Tensor, dict[str, float]]:
         """Run the TGNN forward pass on a batch of transactions.
 
         Args:
@@ -73,6 +73,10 @@ class TGNN(nn.Module):
                 float(len(recv_amounts))
             ])
         X = torch.tensor(X_list, dtype=torch.float32)
+        if feature_mask is not None:
+            if len(feature_mask) != 4 or any(value not in (0.0, 1.0) for value in feature_mask):
+                raise ValueError("Initial-node feature mask must contain four binary values")
+            X = X * torch.tensor(feature_mask, dtype=torch.float32)
 
         # 3. Project node features
         h = self.proj(X)

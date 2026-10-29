@@ -36,6 +36,20 @@ const event = (
   data,
 });
 afterEach(() => vi.useRealTimers());
+it("retains the selected payment's unified score across specialist delivery and reconnect replay", () => {
+  const payment = { transaction_id: "tx", risk_score: .82, ml_used: true,
+    raw_ml_score: .82, detectors: { rules: .5, ml: .82, mule: .6, scam: .2 }, reasons: ["Forwarding"] };
+  const unified = event("transaction.scored", { transaction_id: "tx", risk_score: .99,
+    incident_id: "INC-FIN-test", financial_assessment: { transaction_scores: [payment] } });
+  const specialist = event("transaction.scam_scored", { transaction_id: "tx", risk_score: 30, scam_score: 20 });
+  const state = applyEvent(applyEvent(emptyMonitor(), unified), specialist);
+  expect(state.detections.tx.combined).toBe(82);
+  expect(state.detections.tx.incidentId).toBe("INC-FIN-test");
+  expect(state.detections.tx.financial?.detectors.mule).toBe(.6);
+  expect(applyEvent(state, unified)).toBe(state);
+  const reversed = applyEvent(applyEvent(emptyMonitor(), specialist), unified);
+  expect(reversed.detections.tx.combined).toBe(82);
+});
 describe("synthetic provider and scenario library", () => {
   it("keeps real data unavailable and synthetic mode operational", () => {
     expect(DATA_SOURCES.synthetic.available).toBe(true);
@@ -255,6 +269,7 @@ describe("legacy compatibility", () => {
       />,
     );
     expect(html).toContain("ARGUS Intelligence Lab");
-    expect(html).toContain("RUN CROSS-DOMAIN ANALYSIS");
+    expect(html).toContain("RUN FINANCIAL ANALYSIS");
+    expect(html).toContain("Include optional infrastructure evidence");
   });
 });

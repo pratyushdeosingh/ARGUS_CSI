@@ -1,4 +1,4 @@
-import type { Transaction } from "./types";
+import type { Transaction, FinancialAssessment } from "./types";
 export interface StreamEvent {
   event_id: string;
   event_type: string;
@@ -7,6 +7,8 @@ export interface StreamEvent {
   data: Record<string, unknown>;
 }
 export interface Detection {
+  financial?: FinancialAssessment["transaction_scores"][number];
+  incidentId?: string;
   graph?: number;
   scam?: number;
   combined?: number;
@@ -83,11 +85,16 @@ export function applyEvent(
       for (const key of oldest) delete next.transactions[key];
     }
   }
-  if (event.event_type === "transaction.scored")
+  if (event.event_type === "transaction.scored") {
+    const assessment = data.financial_assessment as FinancialAssessment | undefined;
+    const payment = assessment?.transaction_scores?.find(item => item.transaction_id === id);
     next.detections = {
       ...state.detections,
       [id]: {
         ...state.detections[id],
+        financial: payment,
+        incidentId: typeof data.incident_id === "string" ? data.incident_id : undefined,
+        ...(payment ? { combined: score(payment.risk_score, 1) } : {}),
         graph: score(data.risk_score, 1),
         graphState: "scored",
         graphFlagged: strings(data.suspicious_transactions).includes(id),
@@ -95,13 +102,16 @@ export function applyEvent(
         suspiciousAccounts: strings(data.suspicious_accounts),
       },
     };
+  }
   if (event.event_type === "transaction.scam_scored")
     next.detections = {
       ...state.detections,
       [id]: {
         ...state.detections[id],
         scam: score(data.scam_score, 100),
-        combined: score(data.risk_score, 100),
+        combined: state.detections[id]?.financial
+          ? score(state.detections[id].financial!.risk_score, 1)
+          : score(data.risk_score, 100),
         scamState: "scored",
         scamReasons: [...strings(data.top_factors), ...strings(data.reasons)],
         decision: String(data.decision ?? ""),

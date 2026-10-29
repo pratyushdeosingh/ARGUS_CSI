@@ -9,6 +9,7 @@ COPY backend/requirements.txt /tmp/backend-requirements.txt
 RUN pip install --no-cache-dir -r /tmp/backend-requirements.txt
 
 COPY backend /workspace/backend
+COPY contracts /workspace/contracts
 COPY data /workspace/data
 
 EXPOSE 8000

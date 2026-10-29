@@ -45,6 +45,7 @@ services:
       EBPF_DETECTOR_URL: http://ebpf-detector:8002
       DETECTOR_TIMEOUT_SECONDS: ${DETECTOR_TIMEOUT_SECONDS:-5}
       ARGUS_DB_PATH: /workspace/runtime/argus.db
+      ARGUS_ALLOWED_ORIGINS: ${ARGUS_ALLOWED_ORIGINS:-http://127.0.0.1:5173,http://localhost:5173}
       SCAM_ALERT_THRESHOLD: ${SCAM_ALERT_THRESHOLD:-70.0}
       FRAUD_ALERT_THRESHOLD: ${FRAUD_ALERT_THRESHOLD:-0.70}
       ANALYSIS_WINDOW_MINUTES: ${ANALYSIS_WINDOW_MINUTES:-15}
@@ -73,6 +74,8 @@ services:
     build:
       context: .
       dockerfile: frontend/Dockerfile
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-}
     depends_on:
       argus-backend:
         condition: service_healthy

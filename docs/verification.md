@@ -1,3 +1,41 @@
+# Final integration verification — 29 October 2026
+
+This release combines Yojit's PR #6 redesign/live dashboard with the backend
+work from PR #5. Yojit's PR was merged first at its verified head cc9f276.
+The integration resolves App/style conflicts by retaining the redesigned
+layout, adding the financial case tools and using the same semantic styling.
+
+## Local release results
+
+- Python: **156 passed, 1 skipped** (privileged live Linux eBPF).
+- Frontend: **52 passed**; TypeScript and production Vite build passed.
+- Actual graph/core/infrastructure replay processes: service integration passed.
+- HTTP/WebSocket smoke passed: durable financial-only case, per-payment scoring,
+  duplicate/conflicting/invalid input, all specialist scenarios, investigation
+  revision conflict, draft report, simulated approval/audit and reanalysis.
+- Independent synthetic evaluation reproduced the committed report: fused
+  precision/recall/F1 1.0 on 32 held-out generated cases, rules/raw TGNN recall
+  0.5 at 0.70. This small synthetic result is not real-world accuracy evidence.
+- Browser: live synthetic ingestion and scoring; financial-only takeover Lab
+  analysis with contributions; nested case workbench assignment/status/note
+  saved at revision 1; Escape returned to the still-open Lab. Visual layout
+  was inspected. Broad device/accessibility certification is not claimed.
+
+The integration adds a Docker same-origin Nginx API/WebSocket proxy, configurable
+frontend CORS origins and Vercel static frontend settings. CI verifies actual
+container startup and the proxy boundary; Docker is unavailable locally.
+
+Final remote CI, restart/outage results and the release revision are recorded
+below when the release gate completes. Test databases/logs remain under ignored
+`artifacts/submission-20261029/`; existing user runtime data was not overwritten.
+The official rubric, real-data evaluation and production readiness remain outside
+the verified scope. See the current README/TODO for the delivered workflow and
+remaining work. The earlier audit below describes the historical pre-integration
+baseline and is retained for traceability.
+
+---
+> Historical audit of c1f9a1d. For the current implementation, see [Pratyush delivery](pratyush-delivery.md).
+
 # Fintech readiness verification
 
 Audit date: 24 October 2026 (Asia/Kolkata). Scope: the team's supplied Problem

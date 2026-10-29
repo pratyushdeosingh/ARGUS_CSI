@@ -3,6 +3,7 @@ __pycache__/
 *.py[cod]
 .venv/
 .pytest_cache/
+artifacts/
 data/test-tmp-*/
 venv/
 .env
@@ -19,3 +20,6 @@ dist/
 .idea/
 .DS_Store
 Thumbs.db
+
+# Experimental offline training outputs
+artifacts/

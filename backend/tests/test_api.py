@@ -8,6 +8,8 @@ from backend.app.detectors import DetectorGateway, get_detector_gateway
 from backend.app.main import app
 from backend.app.simulator import load_attack_transactions, load_mock_signals
 from backend.app.state import DemoState
+from backend.tests.financial_fixtures import assessment_for
+from backend.app.models import Transaction
 
 
 client = TestClient(app)
@@ -75,6 +77,10 @@ def test_arbitrary_data_analysis_creates_dynamic_investigation() -> None:
     )
 
     def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/assess-financial":
+            body = json.loads(request.content)
+            txs = [Transaction.model_validate(tx) for tx in body["transactions"]]
+            return httpx.Response(200, json=assessment_for(txs, graph).model_dump(mode="json"))
         if request.url.path == "/analyze-context":
             submitted = json.loads(request.content)
             assert len(submitted["baseline_transactions"]) == 1
@@ -106,7 +112,7 @@ def test_arbitrary_data_analysis_creates_dynamic_investigation() -> None:
             json={
                 "source_label": "integration-test",
                 "transactions": transactions,
-                "baseline_transactions": [transactions[0]],
+                "baseline_transactions": [{**transactions[0], "timestamp": "2026-08-16T10:00:00Z"}],
                 "telemetry_events": [
                     {
                         "timestamp": "2026-08-17T15:31:18Z",

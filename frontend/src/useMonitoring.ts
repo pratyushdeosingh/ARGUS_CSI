@@ -69,7 +69,7 @@ export function useMonitoring(
       });
     };
     const stop = connectStream(
-      `${apiBase.replace(/^http/, "ws")}/ws/transactions`,
+      `${(apiBase || window.location.origin).replace(/^http/, "ws")}/ws/transactions`,
       (event) => {
         if (!disposed && event.event_type === "investigation.updated")
           casesChanged.current?.();

@@ -15,6 +15,7 @@ interface Props {
   onRefresh: () => void;
   onApprove: (item: Incident) => void;
   onAudit: (item: Incident) => void;
+  onInvestigate?: (item: Incident) => void;
   audit: Record<string, AuditEvent[]>;
   busy: boolean;
   formatRisk: (value?: number) => string;
@@ -22,7 +23,7 @@ interface Props {
 
 // This view owns no case data, requests, timers, or monitoring state. Selection
 // is an ID in App; the inspector always reads the latest authoritative props.
-export function CaseBrowser({ financial, historical, selectedKey, onSelect, onOpen, onRefresh, onApprove, onAudit, audit, busy, formatRisk }: Props) {
+export function CaseBrowser({ financial, historical, selectedKey, onSelect, onOpen, onRefresh, onApprove, onAudit, onInvestigate, audit, busy, formatRisk }: Props) {
   const cases: Case[] = [...financial, ...historical];
   const selected = cases.find(item => caseKey(item) === selectedKey) ?? cases[0];
   const inspector = useRef<HTMLElement>(null);
@@ -43,7 +44,7 @@ export function CaseBrowser({ financial, historical, selectedKey, onSelect, onOp
   return <div className="m-case-workspace">
     <section className="m-panel m-case-browser" aria-label="Persisted investigation cases">
       <div className="m-panel-title">
-        <div><h2>Persisted investigation cases</h2><p>Loaded: {financial.length} financial · {historical.length} cross-domain</p></div>
+        <div><h2>Persisted investigation cases</h2><p>Loaded: {financial.length} stream groups · {historical.length} analysis cases</p></div>
         <button onClick={onRefresh}><RefreshCw size={14} /> Refresh</button>
       </div>
       <p className="m-case-scope"><span>Latest 50 per source · loaded subset, not all-time totals.</span><a href="#case-inspector">Selected record ↓</a></p>
@@ -53,7 +54,7 @@ export function CaseBrowser({ financial, historical, selectedKey, onSelect, onOp
           return <article key={caseKey(item)}>
             <button className="m-case-row" aria-pressed={selected === item} aria-controls="case-inspector" onClick={() => onSelect(caseKey(item))}>
               <span className="m-case-row-top"><span className="m-mono">{caseId(item)}</span><span className={`m-alert-severity ${item.severity}`}>{item.severity}</span></span>
-              <span className="m-case-row-meta"><span className={`m-case-source ${isFinancial ? "financial" : "historical"}`}>{isFinancial ? "Financial-only" : "Historical cross-domain"}</span><span className="m-case-status">{item.status.replaceAll("_", " ")}</span></span>
+              <span className="m-case-row-meta"><span className={`m-case-source ${isFinancial || item.case_type === "financial" ? "financial" : "historical"}`}>{isFinancial ? "Financial-only" : item.case_type === "financial" ? "Financial analysis" : "Historical cross-domain"}</span><span className="m-case-status">{item.status.replaceAll("_", " ")}</span></span>
               <strong>{isFinancial ? `${item.source} · ${item.scenario_id ?? "Financial investigation"}` : item.verdict.replaceAll("_", " ")}</strong>
               <span className="m-case-preview">{item.summary}</span>
               <span className="m-case-row-foot"><time dateTime={isFinancial ? item.updated_at : item.timestamp}>{isFinancial ? item.updated_at : item.timestamp}</time><span>{isFinancial ? `${item.accounts.length} accounts · ${item.transaction_ids.length} payments` : `${item.affected_accounts.length} accounts · correlated signals`}</span><ChevronRight size={13} /></span>
@@ -66,12 +67,12 @@ export function CaseBrowser({ financial, historical, selectedKey, onSelect, onOp
     <section className="m-panel m-case-inspector" id="case-inspector" ref={inspector} tabIndex={-1} aria-label="Selected investigation">
       <div className="m-panel-title"><div><h2>Investigation record</h2><p>{selected ? `${caseId(selected)} · stored evidence` : "Select a persisted case"}</p></div><Network size={18} /></div>
       {selected ? <div className="m-case-reading">
-        <div className="m-case-identity"><span className={`m-case-source ${financialCase ? "financial" : "historical"}`}>{financialCase ? "Financial-only investigation" : "Historical cross-domain investigation"}</span><span className={`m-alert-severity ${selected.severity}`}>{selected.severity}</span></div>
+        <div className="m-case-identity"><span className={`m-case-source ${financialCase || historicalCase?.case_type === "financial" ? "financial" : "historical"}`}>{financialCase ? "Financial-only investigation" : historicalCase?.case_type === "financial" ? "Financial analysis investigation" : "Historical cross-domain investigation"}</span><span className={`m-alert-severity ${selected.severity}`}>{selected.severity}</span></div>
         <h3 className="m-mono">{caseId(selected)}</h3>
         <p className="m-case-summary">{selected.summary}</p>
         <dl className="m-case-metadata">
           <dt>Persisted status</dt><dd>{selected.status.replaceAll("_", " ")}</dd>
-          <dt>Source</dt><dd>{financialCase?.source ?? (historicalCase?.incident_id === "INC-001" ? "Canonical Demo" : "Historical cross-domain / Data Lab")}</dd>
+          <dt>Source</dt><dd>{financialCase?.source ?? (historicalCase?.case_type === "financial" ? "Financial analysis" : historicalCase?.incident_id === "INC-001" ? "Canonical Demo" : "Historical cross-domain / Data Lab")}</dd>
           {financialCase ? <>
             <dt>Session</dt><dd className="m-mono">{financialCase.session_id}</dd>
             <dt>Scenario</dt><dd>{financialCase.scenario_id ?? "Unspecified"}</dd>
@@ -86,7 +87,7 @@ export function CaseBrowser({ financial, historical, selectedKey, onSelect, onOp
           <div className="m-case-scores">{Object.entries(financialCase.risk_scores).map(([name, value]) => <div key={name}><span>{name}</span><strong>{formatRisk(value)}</strong></div>)}</div>
           <p className="m-case-qualification">Persisted detector evidence describes suspicious patterns; it is not confirmation of fraud or an executed response.</p>
         </>}
-        <div className="m-case-open"><button className="m-primary" onClick={() => onOpen(selected)}>{financialCase ? "Open financial investigation" : "Open historical investigation"}<ChevronRight size={14} /></button><p>Inspect available stored payments, detector events, and the connected account network.</p></div>
+        <div className="m-case-open"><button className="m-primary" onClick={() => onOpen(selected)}>{financialCase ? "Open financial investigation" : historicalCase?.case_type === "financial" ? "Open financial analysis" : "Open historical investigation"}<ChevronRight size={14} /></button><p>Inspect available stored payments, detector events, and the connected account network.</p>{historicalCase && onInvestigate && <button onClick={() => onInvestigate(historicalCase)}>Manage investigation / draft report</button>}</div>
         <h4>Related accounts <span className="m-count">{financialCase?.accounts.length ?? historicalCase?.affected_accounts.length}</span></h4>
         <div className="m-case-accounts">{(financialCase?.accounts ?? historicalCase?.affected_accounts ?? []).map(id => <span className="m-mono" key={id}>{id}</span>)}</div>
         {financialCase && <><h4>Payment references <span className="m-count">{financialCase.transaction_ids.length}</span></h4><p className="m-case-qualification">Latest {Math.min(20, financialCase.transaction_ids.length)} linked references shown. Open the investigation for its retrieved payment context.</p><div className="m-case-references">{financialCase.transaction_ids.slice(-20).map(id => <span className="m-mono" key={id}>{id}</span>)}</div></>}
@@ -94,7 +95,7 @@ export function CaseBrowser({ financial, historical, selectedKey, onSelect, onOp
         <ul className="m-case-evidence">{selected.evidence.map((entry, i) => <li key={`${i}:${entry}`}>{entry}</li>)}</ul>
         {financialCase && <details className="m-case-signals"><summary>Policy and signal references</summary><p>Policy: {financialCase.policy_version}</p>{financialCase.signal_ids.map(id => <p className="m-mono" key={id}>{id}</p>)}</details>}
         {historicalCase && <section className="m-case-responses" aria-label="Historical simulated responses">
-          <h4>Simulated response workflow</h4><p>Historical containment and approval actions are simulated.</p>
+          <h4>Simulated response workflow</h4><p>Containment and approval actions are simulated.</p>
           {historicalCase.recommended_actions.map(action => <p key={action.action + action.target}>Simulated response: {action.action} · {action.target} · {action.status}</p>)}
           <div className="m-case-response-actions">{historicalCase.status === "awaiting_approval" && <button disabled={busy} onClick={() => onApprove(historicalCase)}>Approve simulated containment</button>}<button onClick={() => onAudit(historicalCase)}>View audit trail</button></div>
           {audit[historicalCase.incident_id]?.map((event, i) => <p key={i}>{event.timestamp} · {event.action} · {event.result}</p>)}

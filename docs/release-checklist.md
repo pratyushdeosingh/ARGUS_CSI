@@ -1,46 +1,35 @@
-# Fintech release checklist
+# Fintech release checklist — 29 October 2026
 
-This is a repeatable verification checklist, not a claim that unchecked fintech
-features exist. Implementation work and owners are in [TODO](../TODO.md).
+Release scope: synthetic assignment workflow, preserving Yojit's redesigned UI.
+See [submission guide](fintech-submission.md) and [verification](verification.md).
 
-## Automated checks
+## Local gate
 
-- [ ] Run the complete Python suite in a supported environment.
-- [ ] Run frontend tests and production build.
-- [ ] Confirm CI passes on the exact PR head being merged.
-- [ ] Confirm all containers build and health checks pass.
-- [ ] Run actual HTTP/WebSocket smoke checks, including invalid/conflicting
-  payment rejection, all specialist scenarios and graph-only response shape.
-- [ ] Verify payment, contained case and audit persistence after backend restart.
-- [ ] Verify batch detector failure is visible and ingestion persists with a
-  streamed analysis-failed event during a graph outage.
+- [x] Full Python suite: 156 passed, 1 privileged Linux eBPF test skipped.
+- [x] Frontend interaction/helper tests: 52 passed; TypeScript/Vite build passed.
+- [x] Real graph/core/replay service integration and all specialist scenarios.
+- [x] HTTP/WebSocket smoke: ingestion, duplicate/conflict/invalid data, financial
+  case, investigation revision, draft export, simulated approval and audit.
+- [x] Reproducible independent synthetic evaluation; no real-data accuracy claim.
+- [x] Browser financial-only Lab analysis and saved assignment/status/note.
+- [x] Nested investigation Escape returns to the still-open accessible Lab.
+- [x] Deployment configuration and same-origin proxy smoke added to CI.
 
-## Manual interface checks
+## Final remote gate
 
-- [ ] Open React, run clean and suspicious Data Lab inputs, and inspect graph,
-  evidence, errors, provenance and history.
-- [ ] Open the standalone graph demo and inspect each scenario and score scale.
-- [ ] Run watcher and replay scripts using fresh run IDs.
-- [ ] Demonstrate simulated approval once on a fresh case and verify repeat
-  approval is rejected; reanalysis must preserve containment and its audit.
-- [ ] Check keyboard use and narrow-screen layout. These interactions are not
-  covered by the existing frontend helper tests or the HTTP smoke script.
+- [ ] Integrated PR has no unresolved Git conflicts and exact-head CI passes.
+- [ ] CI container build/startup and dashboard HTTP/WebSocket proxy pass.
+- [ ] Restart persistence and detector outage checks pass.
+- [ ] Merge release and confirm main CI passes.
 
-## Submission accuracy
+## Submission and runtime boundaries
 
-- [ ] Match the final competition rubric against the team's requirement list.
-- [ ] Update README coverage only for demonstrated capabilities.
-- [ ] Label synthetic data, replay telemetry, simulated actions and model limits.
-- [ ] Keep 0–1 graph scores separate from 0–100 specialist scores.
-- [ ] Do not claim React streaming, financial-only cases, compliance reporting,
-  held-out accuracy or SHAP until their TODO acceptance criteria pass.
-- [ ] Record tested commit, CI link, manual-check results and remaining gaps in
-  the verification report.
-
-## Runtime hygiene
-
-- [ ] Use an isolated synthetic/demo database for smoke checks.
-- [ ] Confirm `.env` is exported for manual processes or mapped by Compose.
-- [ ] Keep runtime databases and local test artifacts out of image build context.
-- [ ] Preserve the named database volume when stopping a demo. Use `down -v`
-  only when intentionally deleting its stored history.
+- [x] Synthetic data, replay infrastructure, simulated actions and model limits
+  are stated in the README and submission guide.
+- [x] Financial analysis cases are distinguished from connected stream groups.
+- [x] Scores retain their documented 0–1 and 0–100 boundaries.
+- [x] Local smoke databases and test artifacts are ignored by Git.
+- [x] Docker preserves SQLite in a named volume; separate Vercel frontend
+  requires a reachable HTTPS backend and configured allowed origins.
+- [ ] Confirm the original official rubric and any required report/video format.
+- [ ] Provision and verify a hosted deployment, if selected by the user.
