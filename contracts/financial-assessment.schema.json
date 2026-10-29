@@ -1,0 +1,371 @@
+{
+  "$defs": {
+    "DetectorScores": {
+      "additionalProperties": false,
+      "properties": {
+        "rules": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Rules",
+          "type": "number"
+        },
+        "ml": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Ml",
+          "type": "number"
+        },
+        "mule": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Mule",
+          "type": "number"
+        },
+        "scam": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Scam",
+          "type": "number"
+        }
+      },
+      "required": [
+        "rules",
+        "ml",
+        "mule",
+        "scam"
+      ],
+      "title": "DetectorScores",
+      "type": "object"
+    },
+    "FeatureSensitivity": {
+      "additionalProperties": false,
+      "properties": {
+        "feature": {
+          "title": "Feature",
+          "type": "string"
+        },
+        "score_without_feature": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Score Without Feature",
+          "type": "number"
+        },
+        "score_difference": {
+          "maximum": 1,
+          "minimum": -1,
+          "title": "Score Difference",
+          "type": "number"
+        }
+      },
+      "required": [
+        "feature",
+        "score_without_feature",
+        "score_difference"
+      ],
+      "title": "FeatureSensitivity",
+      "type": "object"
+    },
+    "FinancialEdge": {
+      "additionalProperties": false,
+      "properties": {
+        "transaction_id": {
+          "title": "Transaction Id",
+          "type": "string"
+        },
+        "source_account": {
+          "title": "Source Account",
+          "type": "string"
+        },
+        "destination_account": {
+          "title": "Destination Account",
+          "type": "string"
+        },
+        "amount": {
+          "title": "Amount",
+          "type": "number"
+        },
+        "currency": {
+          "title": "Currency",
+          "type": "string"
+        },
+        "suspicious": {
+          "title": "Suspicious",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "transaction_id",
+        "source_account",
+        "destination_account",
+        "amount",
+        "currency",
+        "suspicious"
+      ],
+      "title": "FinancialEdge",
+      "type": "object"
+    },
+    "ModelDiagnostic": {
+      "additionalProperties": false,
+      "properties": {
+        "transaction_id": {
+          "title": "Transaction Id",
+          "type": "string"
+        },
+        "method": {
+          "default": "initial_node_feature_ablation",
+          "title": "Method",
+          "type": "string"
+        },
+        "scope": {
+          "default": "Diagnostic only: zero one initial node feature for every node, holding graph and GRU amount/time inputs fixed. Not SHAP, causal attribution or a complete feature explanation.",
+          "title": "Scope",
+          "type": "string"
+        },
+        "raw_score": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Raw Score",
+          "type": "number"
+        },
+        "sensitivities": {
+          "items": {
+            "$ref": "#/$defs/FeatureSensitivity"
+          },
+          "title": "Sensitivities",
+          "type": "array"
+        }
+      },
+      "required": [
+        "transaction_id",
+        "raw_score",
+        "sensitivities"
+      ],
+      "title": "ModelDiagnostic",
+      "type": "object"
+    },
+    "ModelProvenance": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "default": "ARGUS TGNN",
+          "title": "Name",
+          "type": "string"
+        },
+        "checkpoint_sha256": {
+          "title": "Checkpoint Sha256",
+          "type": "string"
+        },
+        "policy_sha256": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Policy Sha256"
+        },
+        "feature_schema": {
+          "default": "tgnn-log-volume-count-v1",
+          "title": "Feature Schema",
+          "type": "string"
+        },
+        "training_data": {
+          "default": "bundled synthetic normal/attack batches",
+          "title": "Training Data",
+          "type": "string"
+        },
+        "validation_status": {
+          "const": "synthetic_only",
+          "default": "synthetic_only",
+          "title": "Validation Status",
+          "type": "string"
+        },
+        "explanation_method": {
+          "default": "Rule evidence and detector contributions; no ML feature attribution",
+          "title": "Explanation Method",
+          "type": "string"
+        }
+      },
+      "required": [
+        "checkpoint_sha256"
+      ],
+      "title": "ModelProvenance",
+      "type": "object"
+    },
+    "PaymentScore": {
+      "additionalProperties": false,
+      "properties": {
+        "transaction_id": {
+          "title": "Transaction Id",
+          "type": "string"
+        },
+        "timestamp": {
+          "format": "date-time",
+          "title": "Timestamp",
+          "type": "string"
+        },
+        "risk_score": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Risk Score",
+          "type": "number"
+        },
+        "detectors": {
+          "$ref": "#/$defs/DetectorScores"
+        },
+        "raw_ml_score": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Raw Ml Score",
+          "type": "number"
+        },
+        "raw_scam_score": {
+          "default": 0,
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Raw Scam Score",
+          "type": "number"
+        },
+        "ml_used": {
+          "title": "Ml Used",
+          "type": "boolean"
+        },
+        "reasons": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Reasons",
+          "type": "array"
+        },
+        "suspicious_accounts": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Suspicious Accounts",
+          "type": "array"
+        },
+        "suspicious_transactions": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Suspicious Transactions",
+          "type": "array"
+        }
+      },
+      "required": [
+        "transaction_id",
+        "timestamp",
+        "risk_score",
+        "detectors",
+        "raw_ml_score",
+        "ml_used",
+        "reasons",
+        "suspicious_accounts",
+        "suspicious_transactions"
+      ],
+      "title": "PaymentScore",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "financial.v1",
+      "default": "financial.v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "assessment_id": {
+      "title": "Assessment Id",
+      "type": "string"
+    },
+    "timestamp": {
+      "format": "date-time",
+      "title": "Timestamp",
+      "type": "string"
+    },
+    "risk_score": {
+      "maximum": 1,
+      "minimum": 0,
+      "title": "Risk Score",
+      "type": "number"
+    },
+    "fusion_policy": {
+      "default": "max-specialists; ML promotion requires independent risk >= 0.40",
+      "title": "Fusion Policy",
+      "type": "string"
+    },
+    "model": {
+      "$ref": "#/$defs/ModelProvenance"
+    },
+    "transaction_scores": {
+      "items": {
+        "$ref": "#/$defs/PaymentScore"
+      },
+      "title": "Transaction Scores",
+      "type": "array"
+    },
+    "suspicious_accounts": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Suspicious Accounts",
+      "type": "array"
+    },
+    "suspicious_transactions": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Suspicious Transactions",
+      "type": "array"
+    },
+    "reasons": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Reasons",
+      "type": "array"
+    },
+    "edges": {
+      "items": {
+        "$ref": "#/$defs/FinancialEdge"
+      },
+      "title": "Edges",
+      "type": "array"
+    },
+    "related_ips": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Related Ips",
+      "type": "array"
+    },
+    "model_diagnostic": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ModelDiagnostic"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    }
+  },
+  "required": [
+    "assessment_id",
+    "timestamp",
+    "risk_score",
+    "model",
+    "transaction_scores",
+    "suspicious_accounts",
+    "suspicious_transactions",
+    "reasons",
+    "edges"
+  ],
+  "title": "FinancialAssessment",
+  "type": "object"
+}

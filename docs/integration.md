@@ -25,7 +25,12 @@ directly into the core correlation formula.
 | POST | `/api/transactions` | Persist one payment and attempt rolling graph scoring |
 | GET | `/api/transactions` | Stored payments; `limit` 1–200, `offset` >= 0 |
 | GET | `/api/transactions/{transaction_id}` | Stored payment or 404 |
-| WS | `/ws/transactions` | Transient transaction and alert event stream |
+| WS | `/ws/transactions` | Live transaction, score, alert and investigation events |
+| GET | `/api/transaction-events?session_id=...` | Bounded persisted session replay, latest 2,000 by default, maximum 5,000 |
+| GET | `/api/financial-investigations` | Connected financial stream evidence groups |
+| GET | `/api/incidents/{incident_id}/context` | Linked stored payments and graph evidence |
+| GET/PATCH | `/api/incidents/{incident_id}/investigation` | Assignment/status/notes with expected revision |
+| GET | `/api/incidents/{incident_id}/report` | Draft report, never a regulatory filing |
 | GET | `/api/detectors/status` | Availability, origin and infrastructure collection mode |
 | GET | `/api/platform/metrics` | Stored transaction/signal/case aggregates |
 | GET | `/api/incidents` | Persisted cases |
@@ -40,14 +45,18 @@ directly into the core correlation formula.
 
 `/api/analyze` accepts 1–5,000 transactions; optional baseline history, raw
 telemetry, a system signal or `correlate_with_latest_system` are supported.
-A supplied baseline uses graph `/analyze-context` without mutating the shared
-baseline. Graph-only success returns no system signal and no incident. With
-infrastructure evidence, correlation creates a case. Reanalysis preserves a
+Core batch/stream scoring now uses graph `/assess-financial`, which returns
+`financial.v1` from shared `contracts/financial_models.py`. A supplied baseline
+must precede all current payments. The graph uses request-scoped history; no
+shared reference history is mutated. Financial-only success has no system
+signal, but qualifying risk creates a durable financial case. Optional
+infrastructure evidence enables cross-domain correlation. Reanalysis preserves a
 contained case's stored state; it does not authorize another containment run.
 
-The core stores input transactions and signals. Current transaction persistence
-is an upsert keyed by transaction ID, rather than an immutable revision ledger.
-See TODO P1-5 for the remaining consistency work.
+The core stores transactions, financial assessments, signals and cases.
+Transaction IDs are immutable: conflicting contents return 409 in both batch
+and stream paths. Identical batches preserve the original stream grouping.
+Corrections need a new ID; transaction revision history is not implemented.
 
 ### Stream behaviour
 
@@ -65,17 +74,24 @@ Event envelopes contain `event_id`, `event_type`, `timestamp` and `data`.
 Supported types: `connection.established`, `transaction.received`,
 `transaction.scored`, `alert.created`, `transaction.analysis_failed`.
 The scored risk describes the rolling batch, not an independently calibrated
-probability for just the payment named by the event. Events are transient and
-broadcast to connected clients; missed events cannot be replayed. Scores are
-stored as signals, but financial-only alerts are not yet durable cases. React
-has no stream subscriber yet. No cross-request ordering guarantee is provided.
+probability for just the payment named by the event. The scored envelope also
+contains `financial_assessment` and an optional `incident_id`; the selected
+payment's entry supplies the UI's unified combined risk and contributions.
+Session events are saved before broadcast and can be retrieved for bounded
+reconnect replay. `investigation.updated` refreshes saved cases in React after
+scoring notifications; scam scoring/alerts retain their supplementary contract.
+Scores are stored as versioned assessments/signals, and qualifying financial
+alerts create durable cases. No cross-request ordering guarantee or automatic
+detector retry worker is provided.
 
 ## Graph API — port 8001
 
 - `GET /health`, `GET /baseline`: readiness/reference-window information.
 - `POST /baseline/train`: replace shared behavioural reference history; refresh
   specialist baseline and history. This does not train the TGNN.
-- `POST /analyze`: transaction array to strict 0–1 `GraphSignal`.
+- `POST /analyze`: legacy transaction array to strict 0–1 `GraphSignal`.
+- `POST /assess-financial`: core-facing request-scoped financial.v1 assessment;
+  normalized per-payment rules/ML/mule/scam scores, evidence and model checksum.
 - `POST /analyze-context`: transactions plus request-scoped baseline.
 - `POST /visualize`: graph nodes and edges with suspicious markers.
 - `POST /score-transaction`: specialist 0–100 scoring response.
@@ -85,9 +101,11 @@ has no stream subscriber yet. No cross-request ordering guarantee is provided.
 - `GET /demo` or `/`: standalone specialist demonstration.
 
 Batch risk uses seven weighted rules; TGNN can promote the result only when
-rule risk >= 0.40. The bundled checkpoint is required at startup. The specialist
-engine separately fuses rules, TGNN, mule and scam scores using experimental
-weights. ALLOW/REVIEW/BLOCK are recommendations, with no payment enforcement.
+rule risk >= 0.40. The bundled checkpoint is required at startup. The legacy specialist engine separately fuses rules, TGNN, mule and scam
+scores using experimental weights. Financial.v1 instead uses maximum normalized
+contributions, permits ML only with independent risk >= 0.40, and withholds scam
+promotion for known payees with baseline-scale amounts and unchanged identity.
+Raw scores and used contributions remain separate. ALLOW/REVIEW/BLOCK are recommendations, with no payment enforcement.
 
 Specialist history is per process and in memory. Individual history accesses
 are locked, but the entire score operation is not a database transaction. Use a
@@ -113,6 +131,22 @@ unavailable detector services. Arbitrary batch and stream scoring never replace
 caller transactions with demo fixture output. Batch detector failure returns
 503; stream scoring failure is reported separately from ingestion success.
 The UI displays detector origin instead of presenting fallbacks as live output.
+
+Additional core endpoints:
+
+- `GET /api/financial-assessments/{assessment_id}` retrieves stored evidence.
+- `GET/PATCH /api/incidents/{incident_id}/investigation` manages assignment,
+  status and notes. PATCH requires caller-supplied `actor` and
+  `expected_revision`; stale updates return 409. History is append-only.
+- `GET /api/incidents/{incident_id}/report` returns a DRAFT_NOT_FILED JSON report
+  with case, source payments, assessment/model, investigation revisions and audit.
+  No regulatory submission occurs and caller identity is not authenticated.
+
+Approval and action-audit updates are one SQLite transaction. Financial cases
+include nullable infrastructure signal ID, case_type, financial assessment ID
+and source transaction IDs. The shared incident schema reflects these fields.
+Currency metrics use value_by_currency; the old scalar total is null for mixed
+currencies. No exchange-rate conversion is implied.
 
 The backend reads process environment variables, not `.env` files. Compose maps
 its supported settings from the root `.env`; graph baseline and frontend build

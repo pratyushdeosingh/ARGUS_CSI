@@ -9,6 +9,9 @@ import os
 from pathlib import Path
 import sqlite3
 from threading import RLock
+from contracts.financial_models import FinancialAssessment
+from .policy import approve_containment
+from .models import IncidentStatus
 
 from .models import (
     AuditEvent,
@@ -113,6 +116,25 @@ class ArgusStore:
                     payload TEXT NOT NULL,
                     FOREIGN KEY(incident_id) REFERENCES incidents(incident_id)
                 );
+                CREATE TABLE IF NOT EXISTS financial_assessments (
+                    assessment_id TEXT PRIMARY KEY,
+                    timestamp TEXT NOT NULL,
+                    payload TEXT NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS investigations (
+                    incident_id TEXT PRIMARY KEY REFERENCES incidents(incident_id),
+                    revision INTEGER NOT NULL DEFAULT 0,
+                    assigned_to TEXT,
+                    status TEXT NOT NULL DEFAULT 'open'
+                );
+                CREATE TABLE IF NOT EXISTS investigation_events (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    incident_id TEXT NOT NULL REFERENCES incidents(incident_id),
+                    timestamp TEXT NOT NULL,
+                    actor TEXT NOT NULL,
+                    revision INTEGER NOT NULL,
+                    payload TEXT NOT NULL
+                );
                 """
             )
 
@@ -134,6 +156,16 @@ class ArgusStore:
             for item in transactions
         ]
         with self._lock, self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            seen = {}
+            for tx in transactions:
+                previous = seen.get(tx.transaction_id)
+                row = connection.execute("SELECT payload FROM transaction_events WHERE transaction_id = ?",
+                                         (tx.transaction_id,)).fetchone()
+                stored = Transaction.model_validate_json(row["payload"]) if row else previous
+                if stored is not None and stored != tx:
+                    raise IngestionConflictError(f"Transaction '{tx.transaction_id}' already exists with different transaction data")
+                seen[tx.transaction_id] = tx
             connection.executemany(
                 """
                 INSERT INTO transaction_events (
@@ -141,20 +173,97 @@ class ArgusStore:
                     destination_account, amount, currency, device_id,
                     ip_address, status, payload
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(transaction_id) DO UPDATE SET
-                    batch_id=excluded.batch_id,
-                    timestamp=excluded.timestamp,
-                    source_account=excluded.source_account,
-                    destination_account=excluded.destination_account,
-                    amount=excluded.amount,
-                    currency=excluded.currency,
-                    device_id=excluded.device_id,
-                    ip_address=excluded.ip_address,
-                    status=excluded.status,
-                    payload=excluded.payload
+                ON CONFLICT(transaction_id) DO NOTHING
                 """,
                 rows,
             )
+
+    def save_assessment(self, assessment: FinancialAssessment) -> None:
+        with self._lock, self._connect() as connection:
+            connection.execute("INSERT OR IGNORE INTO financial_assessments VALUES (?, ?, ?)",
+                               (assessment.assessment_id, assessment.timestamp.isoformat(), assessment.model_dump_json()))
+
+    def get_assessment(self, assessment_id: str) -> FinancialAssessment | None:
+        with self._lock, self._connect() as connection:
+            row = connection.execute("SELECT payload FROM financial_assessments WHERE assessment_id = ?",
+                                     (assessment_id,)).fetchone()
+        return FinancialAssessment.model_validate_json(row["payload"]) if row else None
+
+    def approve_incident(self, incident_id: str, actor: str) -> tuple[Incident, list[AuditEvent]]:
+        """One SQL transaction owns the status transition and append-only action audit."""
+        with self._lock, self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            row = connection.execute("SELECT payload FROM incidents WHERE incident_id = ?", (incident_id,)).fetchone()
+            if row is None:
+                raise KeyError(incident_id)
+            incident = Incident.model_validate_json(row["payload"])
+            if incident.status != IncidentStatus.AWAITING_APPROVAL:
+                raise ValueError(f"Incident cannot be approved while {incident.status.value}")
+            incident, audit = approve_containment(incident, actor)
+            connection.execute("UPDATE incidents SET status = ?, payload = ? WHERE incident_id = ?",
+                               (incident.status.value, incident.model_dump_json(), incident_id))
+            connection.executemany("INSERT INTO audit_events (incident_id, timestamp, payload) VALUES (?, ?, ?)",
+                                   [(incident_id, event.timestamp.isoformat(), event.model_dump_json()) for event in audit])
+        return incident, audit
+
+    def get_investigation(self, incident_id: str) -> dict:
+        with self._lock, self._connect() as connection:
+            if not connection.execute("SELECT 1 FROM incidents WHERE incident_id = ?", (incident_id,)).fetchone():
+                raise KeyError(incident_id)
+            row = connection.execute("SELECT * FROM investigations WHERE incident_id = ?", (incident_id,)).fetchone()
+            events = connection.execute("SELECT * FROM investigation_events WHERE incident_id = ? ORDER BY id",
+                                        (incident_id,)).fetchall()
+        return {"incident_id": incident_id, "revision": row["revision"] if row else 0,
+                "assigned_to": row["assigned_to"] if row else None, "status": row["status"] if row else "open",
+                "history": [{"id": event["id"], "timestamp": event["timestamp"], "actor": event["actor"],
+                             "revision": event["revision"], "changes": json.loads(event["payload"])} for event in events]}
+
+    def update_investigation(self, incident_id: str, actor: str, expected_revision: int, changes: dict) -> dict:
+        with self._lock, self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            if not connection.execute("SELECT 1 FROM incidents WHERE incident_id = ?", (incident_id,)).fetchone():
+                raise KeyError(incident_id)
+            connection.execute("INSERT OR IGNORE INTO investigations (incident_id) VALUES (?)", (incident_id,))
+            row = connection.execute("SELECT * FROM investigations WHERE incident_id = ?", (incident_id,)).fetchone()
+            if row["revision"] != expected_revision:
+                raise ValueError("Investigation changed; reload its current revision before saving")
+            revision = expected_revision + 1
+            connection.execute("UPDATE investigations SET revision = ?, assigned_to = ?, status = ? WHERE incident_id = ?",
+                               (revision, changes.get("assigned_to", row["assigned_to"]), changes.get("status", row["status"]), incident_id))
+            connection.execute("INSERT INTO investigation_events (incident_id, timestamp, actor, revision, payload) VALUES (?, ?, ?, ?, ?)",
+                               (incident_id, datetime.now(timezone.utc).isoformat(), actor, revision, json.dumps(changes)))
+        return self.get_investigation(incident_id)
+
+    def report_snapshot(self, incident_id: str) -> dict:
+        """Read report evidence in one SQLite snapshot, including its immutable history."""
+        with self._lock, self._connect() as connection:
+            connection.execute("BEGIN")
+            row = connection.execute("SELECT payload FROM incidents WHERE incident_id = ?", (incident_id,)).fetchone()
+            if row is None:
+                raise KeyError(incident_id)
+            incident = Incident.model_validate_json(row["payload"])
+            investigation = connection.execute("SELECT * FROM investigations WHERE incident_id = ?", (incident_id,)).fetchone()
+            history = connection.execute("SELECT * FROM investigation_events WHERE incident_id = ? ORDER BY id", (incident_id,)).fetchall()
+            audit = connection.execute("SELECT payload FROM audit_events WHERE incident_id = ? ORDER BY id", (incident_id,)).fetchall()
+            assessment = connection.execute("SELECT payload FROM financial_assessments WHERE assessment_id = ?",
+                                            (incident.financial_assessment_id,)).fetchone()
+            transactions = []
+            for identifier in incident.transaction_ids:
+                tx = connection.execute("SELECT payload FROM transaction_events WHERE transaction_id = ?", (identifier,)).fetchone()
+                if tx:
+                    transactions.append(json.loads(tx["payload"]))
+        return {
+            "case": incident.model_dump(mode="json"),
+            "investigation": {"revision": investigation["revision"] if investigation else 0,
+                              "assigned_to": investigation["assigned_to"] if investigation else None,
+                              "status": investigation["status"] if investigation else "open"},
+            "investigation_history": [{"id": event["id"], "timestamp": event["timestamp"],
+                                       "actor": event["actor"], "revision": event["revision"],
+                                       "changes": json.loads(event["payload"])} for event in history],
+            "transactions": transactions,
+            "financial_assessment": json.loads(assessment["payload"]) if assessment else None,
+            "containment_audit": [json.loads(event["payload"]) for event in audit],
+        }
 
     def save_signal(self, signal: GraphSignal | SystemSignal) -> None:
         signal_type = "graph" if isinstance(signal, GraphSignal) else "system"
@@ -295,6 +404,8 @@ class ArgusStore:
             severity_rows = connection.execute(
                 "SELECT severity, COUNT(*) AS count FROM incidents GROUP BY severity"
             ).fetchall()
+            value_rows = connection.execute("SELECT currency, SUM(amount) AS total FROM transaction_events GROUP BY currency").fetchall()
+        values = {row["currency"]: round(row["total"], 2) for row in value_rows}
         return PlatformMetrics(
             transactions_ingested=transactions["count"],
             signals_analyzed=signal_count,
@@ -302,7 +413,8 @@ class ArgusStore:
             incidents_open=incident_summary["open_count"] or 0,
             critical_incidents=incident_summary["critical_count"] or 0,
             accounts_observed=account_count,
-            total_value_observed=round(transactions["total"], 2),
+            total_value_observed=round(transactions["total"], 2) if len(values) <= 1 else None,
+            value_by_currency=values,
             average_confidence=round(incident_summary["average"], 3),
             severity_counts={row["severity"]: row["count"] for row in severity_rows},
         )
@@ -555,10 +667,11 @@ class ArgusStore:
         case = self.get_incident(incident_id)
         if case is None:
             return None
+        assessment = self.get_assessment(case.financial_assessment_id) if case.financial_assessment_id else None
         with self._lock, self._connect() as connection:
             row = connection.execute("SELECT payload FROM detector_signals WHERE signal_id = ?", (case.financial_signal_id,)).fetchone()
             signal = GraphSignal.model_validate_json(row['payload']) if row else None
-            ids = signal.suspicious_transactions[:200] if signal else []
+            ids = (case.transaction_ids or (signal.suspicious_transactions if signal else []))[:200]
             transactions = []
             for transaction_id in ids:
                 tx_row = connection.execute("SELECT payload FROM transaction_events WHERE transaction_id = ?", (transaction_id,)).fetchone()
@@ -569,7 +682,9 @@ class ArgusStore:
             for tx in transactions:
                 events.append(dict(event_id=f"stored:{signal.signal_id}:{tx['transaction_id']}",
                                    event_type='transaction.scored', timestamp=signal.timestamp.isoformat(),
-                                   data={**signal.model_dump(mode='json'), 'transaction_id': tx['transaction_id']}))
+                                   data={**signal.model_dump(mode='json'), 'transaction_id': tx['transaction_id'],
+                                         'incident_id': case.incident_id,
+                                         'financial_assessment': assessment.model_dump(mode='json') if assessment else None}))
         return dict(session_id=f"historical:{incident_id}", transactions=transactions, events=events)
 
     def transaction_context(self, transaction_id: str) -> dict | None:

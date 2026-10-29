@@ -12,6 +12,7 @@ RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/wh
 
 
 COPY services/graph-detector /workspace/services/graph-detector
+COPY contracts /workspace/contracts
 COPY data/normal/transactions.json /workspace/data/normal/transactions.json
 COPY data/attack/transactions.json /workspace/data/attack/transactions.json
 WORKDIR /workspace/services/graph-detector

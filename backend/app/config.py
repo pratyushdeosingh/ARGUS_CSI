@@ -4,6 +4,13 @@ from dataclasses import dataclass
 import os
 
 
+def allowed_origins() -> list[str]:
+    """Explicit frontend origins for local use and separately hosted dashboards."""
+    return [origin.strip().rstrip("/") for origin in os.getenv(
+        "ARGUS_ALLOWED_ORIGINS", "http://127.0.0.1:5173,http://localhost:5173"
+    ).split(",") if origin.strip()]
+
+
 @dataclass(frozen=True)
 class Settings:
     detector_mode: str

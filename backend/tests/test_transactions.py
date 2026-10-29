@@ -270,6 +270,10 @@ def test_existing_api_analyze_compatibility(client: TestClient, isolated_store: 
     )
 
     def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/assess-financial":
+            from backend.tests.financial_fixtures import assessment_for
+            txs = [Transaction.model_validate(tx) for tx in json.loads(request.content)["transactions"]]
+            return httpx.Response(200, json=assessment_for(txs, graph_sig).model_dump(mode="json"))
         return httpx.Response(200, json=graph_sig.model_dump(mode="json"))
 
     settings = Settings(

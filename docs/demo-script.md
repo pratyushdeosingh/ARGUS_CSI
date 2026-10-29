@@ -1,49 +1,43 @@
 # Fintech demo walkthrough
 
-Use synthetic data and say which interface is being demonstrated. The payment
-stream, specialist scoring demo and React case workflow currently remain
-separate. Do not describe them as one completed financial investigation flow.
+Follow [the submission guide](fintech-submission.md#presentation-sequence) for
+the complete redesigned dashboard walkthrough, including financial-only Lab
+analysis, live synthetic monitoring, graph inspection, stored cases and reports.
 
-## 1. Show the implemented financial analysis
+The financial.v1 batch/stream assessment, persisted analysis cases and React
+workbench share one scoring contract. The standalone legacy specialist demo
+uses a separate experimental 0–100 fusion and in-memory history; label it when
+showing that interface. All bank response actions remain simulated.
 
-1. Start the stack using the README. Open the React dashboard and Data Lab.
-2. Run a clean control, then an account-takeover or fan-out batch.
-3. Inspect account connections, suspicious transactions, score and rule evidence.
-4. Explain that Data Lab starters can include infrastructure telemetry. A
-   financial-only `/api/analyze` request currently returns a score without a case.
+## Optional CLI stream
 
-## 2. Show payment streaming
+With the graph and core services running, open a watcher terminal:
 
-1. Run `python scripts/watch_transactions.py` in a separate terminal.
-2. Replay `data/generated/normal.json` using a fresh `--run-id`.
-3. Replay `data/generated/mule.json` with another fresh `--run-id`.
-4. Inspect received/scored events and the mule alert. The score describes the
-   rolling session window; it is not a calibrated payment fraud probability.
-5. State that React live updates and durable financial-only alerts/cases are
-   next work. The watcher displays the stream today.
+```powershell
+python scripts/watch_transactions.py --url ws://127.0.0.1:8000/ws/transactions
+```
 
-Full commands are in the README and `scripts/README.md`.
+Replay inputs with fresh run IDs in another terminal:
 
-## 3. Show specialist mule/scam scoring
+```powershell
+python scripts/replay_transactions.py --input data/generated/normal.json --run-id normal-demo-01 --interval 0.2
+python scripts/replay_transactions.py --input data/generated/mule.json --run-id mule-demo-01 --interval 0.2
+```
 
-1. Open `http://127.0.0.1:8001/demo` (its graph library requires CDN access).
-2. Compare normal, mule-account, scam fan-out and burst scenarios.
-3. Inspect rules/TGNN/mule/scam breakdown and reasons.
-4. Explain that this score uses a separate 0–100 experimental fusion and
-   in-memory history. BLOCK is a recommendation; no bank action occurs.
-5. State that the TGNN was trained on synthetic canonical batches. There are
-   no held-out accuracy, SHAP or production-readiness claims.
+The dashboard's synthetic run is session isolated. An independently replayed CLI
+session does not appear as if it belonged to that active run. Persisted analysis
+cases can be opened through Investigations; the watcher shows all stream events.
 
-## 4. Optional existing cross-domain workflow
+## Optional specialist and infrastructure demos
 
-Use the React canonical demo to show infrastructure replay, correlation,
-analyst-approved simulated containment and stored action audit. Replaying a
-contained case does not reopen it; the reset button clears display state, not
-persistent cases. Use a separate demo database for a fresh approval walkthrough.
+Open `http://127.0.0.1:8001/demo` and compare normal, mule, fan-out and burst
+scenarios. Its graph library requires CDN access. Explain the detector breakdown
+and the difference between a recommendation and a real payment control.
 
-## Close with the next work
+Use Canonical Demo to show infrastructure replay, correlated evidence and
+analyst-approved simulated containment. Replaying a contained case preserves
+its audit; resetting the display does not erase persisted history.
 
-Show `TODO.md`: unified scoring, financial-only cases, live React updates,
-recoverable scoring/alerts, independent ML evaluation and compliance workflow.
-Show the CI result and verification report as engineering evidence, rather
-than representing passing synthetic tests as proof of real-world accuracy.
+Close with the verification report and synthetic evaluation evidence. Remaining
+research/production work is tracked in [TODO](../TODO.md); passing synthetic
+checks does not establish representative fraud accuracy or regulatory compliance.

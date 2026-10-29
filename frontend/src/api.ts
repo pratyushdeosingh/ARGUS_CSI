@@ -6,11 +6,12 @@ import type {
   AttackResponse,
   DetectorStatus,
   Incident,
+  Investigation,
   NormalResponse,
   PlatformMetrics,
 } from "./types";
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "http://127.0.0.1:8000";
+const API_BASE = (import.meta.env.VITE_API_BASE_URL ?? "http://127.0.0.1:8000").replace(/\/+$/, "");
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`, init);
@@ -133,4 +134,21 @@ export function loadIncidentContext(
   id: string,
 ): Promise<import("./types").InvestigationContext> {
   return request(`/api/incidents/${encodeURIComponent(id)}/context`);
+}
+
+export function loadInvestigation(incidentId: string): Promise<Investigation> {
+  return request<Investigation>(`/api/incidents/${encodeURIComponent(incidentId)}/investigation`);
+}
+
+export function updateInvestigation(incidentId: string, update: {
+  actor: string; expected_revision: number; assigned_to: string | null;
+  status: Investigation["status"]; note?: string;
+}): Promise<Investigation> {
+  return request<Investigation>(`/api/incidents/${encodeURIComponent(incidentId)}/investigation`, {
+    method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(update),
+  });
+}
+
+export function loadDraftReport(incidentId: string): Promise<Record<string, unknown>> {
+  return request<Record<string, unknown>>(`/api/incidents/${encodeURIComponent(incidentId)}/report`);
 }

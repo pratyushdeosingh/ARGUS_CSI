@@ -1,42 +1,37 @@
 # ARGUS React dashboard
 
-React, TypeScript, Vite and Cytoscape interface for batch financial analysis and
-the existing cross-domain investigation demo. It calls the core backend on port
-8000, rather than calling detector services directly.
+Yojit's React/TypeScript/Vite and Cytoscape dashboard provides live synthetic
+monitoring, alerts, graph investigation, persisted financial cases and the
+optional canonical cross-domain demonstration.
 
-## Implemented
+- Overview, Transactions, Alerts, Investigations, Demo and Lab navigation.
+- Seeded synthetic scenario controls, pause/resume and explicit session isolation.
+- WebSocket scores/failures, bounded persisted event replay on reconnect.
+- Financial.v1 payment contributions; rolling graph and supplementary scam scores.
+- Financial-only Lab inputs with optional infrastructure, model provenance and
+  rule evidence. Investigation assignment/status/notes and draft JSON exports.
+- Simulated approval and stored action audit; no bank controls.
 
-- Editable Data Lab transaction, baseline and telemetry inputs.
-- Transaction/account graph, risk panels, rule evidence and detector provenance.
-- Staged canonical demo, correlated cases and persisted case history.
-- Analyst approval for simulated containment and action audit display.
+The real-data provider is disabled. Analyst identities are caller supplied;
+authenticated roles and real-data evaluation remain pending.
 
-## Missing
+## Run and verify
 
-There is no WebSocket subscriber, live payment feed or specialist mule/scam
-breakdown in this React app. The staged demo timeline is a presentation, not a
-live payment stream. Use the CLI watcher and standalone graph demo for those
-current capabilities. Financial-only cases and compliance reporting are also
-pending. See [TODO](../TODO.md).
-
-## Run
-
-Install/start services using the root [README](../README.md), then:
+Start services using the root [README](../README.md), then:
 
 ```powershell
 pnpm --dir frontend install --frozen-lockfile
 pnpm --dir frontend dev --host 127.0.0.1
-```
-
-Open [localhost:5173](http://127.0.0.1:5173). Use **DATA LAB** for custom batch
-analysis and **CANONICAL DEMO** for the staged cross-domain scenario. Override
-`VITE_API_BASE_URL` in the frontend environment before dev/build when necessary.
-
-```powershell
 pnpm --dir frontend test
 pnpm --dir frontend build
 ```
 
-Current tests cover API/helper behaviour and source labels, rather than a full
-rendered browser workflow. Keyboard, layout, graph rendering and complete user
-interaction checks remain part of the [release checklist](../docs/release-checklist.md).
+Manual development defaults to `http://127.0.0.1:8000`. Override
+`VITE_API_BASE_URL` in `frontend/.env.local` before dev/build. Docker uses its
+same-origin Nginx HTTP/WebSocket proxy. For Vercel, use `frontend` as the project
+root and configure the public HTTPS backend URL; see
+[deployment](../docs/deployment.md).
+
+Tests cover rendered dashboard interactions, selection, graph boundaries,
+modal focus/keyboard, stream reconnect/reducers, seeded scenarios and API helpers.
+Browser verification is still needed for actual Cytoscape rendering and layout.

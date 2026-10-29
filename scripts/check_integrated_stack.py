@@ -17,16 +17,16 @@ import websockets
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def request(url, payload=None):
+def request(url, payload=None, method=None):
     body = json.dumps(payload).encode() if payload is not None else None
-    req = Request(url, data=body, headers={"Content-Type": "application/json"})
+    req = Request(url, data=body, headers={"Content-Type": "application/json"}, method=method)
     with urlopen(req, timeout=30) as response:
         return json.load(response)
 
 
-def expect_status(url, payload, expected):
+def expect_status(url, payload, expected, method=None):
     try:
-        request(url, payload)
+        request(url, payload, method)
     except HTTPError as error:
         assert error.code == expected, error
     else:
@@ -40,6 +40,10 @@ async def main(args):
         assert case == saved["incident"]
         assert request(f"http://127.0.0.1:8000/api/transactions/{saved['transaction']['transaction_id']}") == saved["transaction"]
         assert request(f"http://127.0.0.1:8000/api/audit?incident_id={case['incident_id']}") == saved["audit"]
+        report = request(f"http://127.0.0.1:8000/api/incidents/{case['incident_id']}/report")
+        assert report["investigation"]["revision"] == 1
+        assert report["investigation_history"][0]["changes"]["note"] == "Synthetic evidence reviewed for smoke test."
+        assert report["financial_assessment"]["assessment_id"] == saved["assessment_id"]
         replay = request("http://127.0.0.1:8000/api/analyze", saved["analysis_payload"])
         assert replay["incident"] == case
         expect_status(f"http://127.0.0.1:8000/api/incidents/{case['incident_id']}/approve", {}, 409)
@@ -71,7 +75,9 @@ async def main(args):
         "transactions": attack, "baseline_transactions": baseline,
     })
     assert graph_only["system_signal"] is None
-    assert graph_only["incident"] is None  # Explicitly verify this remaining fintech gap.
+    assert graph_only["incident"]["case_type"] == "financial"
+    assert graph_only["incident"]["infrastructure_signal_id"] is None
+    assert graph_only["financial_assessment"]["risk_score"] == graph_only["graph_signal"]["risk_score"]
     analysis_payload = {
         "transactions": attack,
         "baseline_transactions": baseline,
@@ -81,7 +87,9 @@ async def main(args):
     assert result["graph_signal"]["risk_score"] >= 0.7
     assert result["detector_status"]["graph"]["origin"] == "service"
     assert result["incident"] is not None
-    incident_id = result["incident"]["incident_id"]
+    # Continue the workflow using the financial-only case, independent of telemetry.
+    incident_id = graph_only["incident"]["incident_id"]
+    analysis_payload.pop("correlate_with_latest_system")
     assert request(f"http://127.0.0.1:8000/api/incidents/{incident_id}")["incident_id"] == incident_id
 
     session = f"SMOKE-{uuid4().hex[:8]}"
@@ -112,6 +120,14 @@ async def main(args):
     specialist = request("http://127.0.0.1:8001/score-transaction", tx)
     assert 0 <= specialist["risk_score"] <= 100
     assert set(specialist["detectors"]) == {"rules", "tgnn", "mule", "scam"}
+    investigation_url = f"http://127.0.0.1:8000/api/incidents/{incident_id}/investigation"
+    edit = {"actor": "smoke-analyst", "assigned_to": "Pratyush", "expected_revision": 0,
+            "status": "investigating", "note": "Synthetic evidence reviewed for smoke test."}
+    assert request(investigation_url, edit, "PATCH")["revision"] == 1
+    expect_status(investigation_url, edit, 409, "PATCH")
+    report = request(f"http://127.0.0.1:8000/api/incidents/{incident_id}/report")
+    assert report["status"] == "DRAFT_NOT_FILED"
+    assert len(report["transactions"]) == len(attack)
     for scenario in request("http://127.0.0.1:8001/api/scenarios"):
         scored = request(f"http://127.0.0.1:8001/api/scenarios/{scenario['id']}/run", {})["score_result"]
         assert scored["risk_band"] == scenario["expected_band"]
@@ -128,6 +144,7 @@ async def main(args):
         args.state_file.write_text(json.dumps({
             "incident": approved, "transaction": received["transaction"],
             "audit": audit, "analysis_payload": analysis_payload,
+            "assessment_id": graph_only["financial_assessment"]["assessment_id"],
         }))
     print("STACK SMOKE PASSED: real detector calls, durable case, WebSocket scoring, idempotency, specialist API")
 

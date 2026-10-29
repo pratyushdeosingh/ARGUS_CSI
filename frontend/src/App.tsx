@@ -44,6 +44,7 @@ import {
 import { useMonitoring } from "./useMonitoring";
 import { MoneyGraph } from "./MoneyGraph";
 import { CaseBrowser } from "./CaseBrowser";
+import { CaseWorkbench } from "./CaseWorkbench";
 import { NavigationShell, type Page } from "./NavigationShell";
 import { KpiTrend } from "./KpiTrend";
 import { runTrends, investigationTrend } from "./kpiTrends";
@@ -94,6 +95,7 @@ export default function App() {
   const [page, setPage] = useState<Page>("Overview");
   const monitoringPage = page !== "Demo" && page !== "Lab";
   const [caseSelection, setCaseSelection] = useState("");
+  const [workbenchId, setWorkbenchId] = useState<string | null>(null);
   const [config, setConfig] = useState<RunConfig>(() => newConfig());
   const [running, setRunning] = useState(false);
   const [speed, setSpeed] = useState(2);
@@ -712,8 +714,13 @@ export default function App() {
             risk describes the rolling session window (0–1 normalized to 100),
             not an individual payment. A graph flag requires this transaction in
             the detector’s suspicious transaction list. Specialist scores use
-            0–100.
+            0–100. Combined uses this payment’s unified financial assessment when available.
           </p>
+          {detection?.financial && <section aria-label="Payment detector contributions">
+            <h3>Payment detector contributions</h3>
+            <div className="m-scores">{Object.entries(detection.financial.detectors).map(([name, value]) => <div key={name}><span>{name === "ml" && !detection.financial?.ml_used ? "ML withheld" : name}</span><strong>{risk(value * 100)}</strong></div>)}</div>
+            {detection.incidentId && <button onClick={() => setWorkbenchId(detection.incidentId!)}>Manage investigation / draft report</button>}
+          </section>}
           <h3>Evidence</h3>
           {[
             ...new Set([
@@ -1039,6 +1046,7 @@ export default function App() {
                 void openCase(item);
               }}
               onRefresh={refresh}
+              onInvestigate={(item) => setWorkbenchId(item.incident_id)}
               audit={audit}
               busy={caseBusy}
               formatRisk={risk}
@@ -1233,6 +1241,7 @@ export default function App() {
           return response;
         }}
       />
+      {workbenchId && <CaseWorkbench key={workbenchId} incidentId={workbenchId} onClose={() => { setWorkbenchId(null); refresh(); }} />}
     </div>
   );
 }

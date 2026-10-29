@@ -102,7 +102,7 @@ it("announces validation, keeps the original request payload and displays return
   const select = container.querySelector('select')!;
   await act(async () => { select.value = 'clean'; select.dispatchEvent(new Event('change', { bubbles: true })); });
   await act(async () => run().click());
-  expect(onAnalyze).toHaveBeenCalledExactlyOnceWith(LAB_TEMPLATES.clean.request);
+  expect(onAnalyze).toHaveBeenCalledExactlyOnceWith({ ...LAB_TEMPLATES.clean.request, telemetry_events: [] });
   expect(run().disabled).toBe(true);
   expect(container.querySelector('.lab-content')?.getAttribute('aria-busy')).toBe('true');
   const component = { availability: 'online' as const, origin: 'service' as const, mode: 'live' as const, detail: 'test' };

@@ -1,8 +1,9 @@
 # Financial graph and specialist scoring service
 
 FastAPI service on port 8001. It contains two scoring paths with different
-contracts. The core backend currently calls the batch path; the specialist path
-is available through its own API/demo and is not integrated into core/React.
+contracts. The core backend now calls request-scoped /assess-financial, reusing the
+detector components on a financial.v1 contract. The legacy batch and 0–100
+specialist APIs remain available. See the [delivery report](../../docs/pratyush-delivery.md).
 
 ## Batch graph analysis — 0–1 risk
 
@@ -85,3 +86,23 @@ mixed-currency rules, input-derived identity, baseline isolation, specialist
 scenarios and bounded history. They do not substitute for independent model
 evaluation, browser interaction testing or load testing. Next work is in
 [TODO.md](../../TODO.md).
+
+## Unified financial.v1 assessment
+
+`POST /assess-financial` accepts current transactions plus optional historical
+baseline. It uses request-scoped, chronological, currency-specific context
+(maximum 100 payments per decision), so parallel callers cannot share scoring
+history. It returns per-payment normalized rules, ML, mule and scam contributions,
+raw ML/scam values, used/withheld model status, evidence/edges and loaded-checkpoint
+checksum. Explicit baseline history must precede current input.
+
+Fusion is the maximum used contribution. Independent behavioural risk >= 0.40
+is required before ML may contribute. Known beneficiaries with baseline-scale
+amounts and unchanged identity do not receive scam promotion solely for fan-out.
+Cancelled payments contribute zero. These policies need representative validation.
+The model checksum is taken from the bytes loaded, rather than a later file read.
+
+The backend persists this output and creates qualifying financial-only cases.
+React Data Lab consumes the same score contract. The legacy /score-transaction
+shared-memory limitations do not apply to this request-scoped route, but live
+production throughput and broad concurrency still need measurement.

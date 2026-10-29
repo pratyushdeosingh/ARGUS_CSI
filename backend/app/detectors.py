@@ -20,6 +20,8 @@ from .models import (
 )
 from .simulator import load_mock_signals
 from .state import DemoState, demo_state
+from contracts.financial_models import FinancialAssessment
+from .financial import assessment_signal
 
 
 class DetectorUnavailable(RuntimeError):
@@ -36,6 +38,24 @@ class DetectorGateway:
         self.settings = settings
         self.state = state
         self.transport = transport
+
+    async def assess_financial(self, transactions: list[Transaction], *,
+                               baseline_transactions: list[Transaction] | None = None) -> FinancialAssessment:
+        if self.settings.detector_mode == "fixture":
+            raise DetectorUnavailable("Financial assessment requires the graph service; fixture substitution is disabled.")
+        async with httpx.AsyncClient(timeout=self.settings.detector_timeout_seconds, transport=self.transport) as client:
+            try:
+                response = await client.post(f"{self.settings.graph_detector_url}/assess-financial", json={
+                    "transactions": [tx.model_dump(mode="json") for tx in transactions],
+                    "baseline_transactions": [tx.model_dump(mode="json") for tx in baseline_transactions or []],
+                })
+                response.raise_for_status()
+                assessment = FinancialAssessment.model_validate(response.json())
+                if {tx.transaction_id for tx in transactions} != {score.transaction_id for score in assessment.transaction_scores}:
+                    raise ValueError("Financial service returned mismatched payment IDs")
+                return assessment
+            except Exception as error:
+                raise DetectorUnavailable(f"Financial assessment unavailable: {self._error_detail(error)}") from error
 
     async def collect(
         self, transactions: list[Transaction]
@@ -127,6 +147,7 @@ class DetectorGateway:
         correlate_with_latest_system: bool = False,
         telemetry_host: str = "payment-node-01",
         telemetry_service: str = "payment-api",
+        financial_assessment: FinancialAssessment | None = None,
     ) -> tuple[GraphSignal, SystemSignal | None, DetectorStatus]:
         """Analyze caller data without ever substituting canonical fixtures."""
 
@@ -138,7 +159,7 @@ class DetectorGateway:
         timeout = httpx.Timeout(self.settings.detector_timeout_seconds)
         async with httpx.AsyncClient(timeout=timeout, transport=self.transport) as client:
             try:
-                graph = await self._fetch_graph(
+                graph = assessment_signal(financial_assessment) if financial_assessment is not None else await self._fetch_graph(
                     client,
                     transactions,
                     baseline_transactions=baseline_transactions,

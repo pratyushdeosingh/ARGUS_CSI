@@ -39,6 +39,15 @@ jobs:
       - name: Run Python tests
         run: python -m pytest -q
 
+      - name: Evaluate independent synthetic validation and test splits
+        run: python scripts/evaluate_financial.py --output reports/financial-evaluation.json
+
+      - name: Save synthetic evaluation evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: financial-evaluation
+          path: reports/financial-evaluation.json
+
       - name: Set up Node.js
         uses: actions/setup-node@v7
         with:
@@ -68,6 +77,7 @@ jobs:
         run: |
           python -m backend.app.integration_check
           python scripts/check_integrated_stack.py --state-file "$RUNNER_TEMP/argus-smoke.json"
+          python scripts/check_dashboard_proxy.py
 
       - name: Verify persistence after backend restart
         run: |

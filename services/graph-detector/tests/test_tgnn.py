@@ -36,6 +36,19 @@ def test_tgnn_forward_pass_nonempty(normal_transactions):
         assert 0.0 <= val <= 1.0
 
 
+def test_initial_feature_ablation_preserves_identity_mask_and_changes_zeroed_input(normal_transactions):
+    model = TGNN()
+    model.eval()
+    with torch.no_grad():
+        original, _ = model(normal_transactions)
+        unchanged, _ = model(normal_transactions, feature_mask=[1, 1, 1, 1])
+        removed, _ = model(normal_transactions, feature_mask=[0, 0, 0, 0])
+    assert torch.equal(original, unchanged)
+    assert not torch.equal(original, removed)
+    with pytest.raises(ValueError):
+        model(normal_transactions, feature_mask=[0, 1])
+
+
 def test_tgnn_neighborhood_influence():
     """Verify that changing a node's neighbor graph structure affects its risk score."""
     model = TGNN()

@@ -39,6 +39,8 @@ export function useDialogFocus(open: boolean, dialog: RefObject<HTMLElement | nu
     const controls = () => Array.from(modal.querySelectorAll<HTMLElement>(focusable)).filter(available);
     const first = () => controls()[0] ?? modal;
     const keydown = (event: KeyboardEvent) => {
+      // A nested native investigation dialog owns its keyboard/focus behavior.
+      if (event.target instanceof Element && event.target.closest("dialog[open]")) return;
       if (event.key === "Escape" && !event.defaultPrevented && !event.isComposing) {
         event.preventDefault();
         event.stopPropagation();

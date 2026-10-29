@@ -51,7 +51,7 @@ Run `pnpm --dir frontend test`, `pnpm --dir frontend build`, and `./.venv/bin/py
 
 Satoshi is preferred when installed locally; Inter/system fallbacks are used without bundling a proprietary font. Google-hosted Inter/IBM Plex Mono imports are inherited from the original stylesheet. No supplied screenshot or typography image was available, so layout follows the written specification.
 
-The browser must reach the API URL (default `http://127.0.0.1:8000`; override `VITE_API_BASE_URL` at build time). Docker uses actual graph and replay-mode eBPF services. If detectors are unavailable, errors and missing scores remain visible. No real banking integration, production-scale throughput certification, payment freezing, assignments or notes were added. Financial case creation is described below.
+For manual Vite development the API defaults to `http://127.0.0.1:8000`; override `VITE_API_BASE_URL` at build time. Docker uses a same-origin Nginx API/WebSocket proxy, actual graph and replay-mode eBPF services. Detector errors and missing scores remain visible. No real banking integration, production-scale throughput certification or payment freezing is claimed. The integrated analysis-case workbench supports assignment, notes/status, revision history and draft JSON exports. See [deployment](deployment.md).
 
 
 ## Financial-only investigations and alert repair

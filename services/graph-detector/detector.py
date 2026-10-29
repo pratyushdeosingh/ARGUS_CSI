@@ -2,6 +2,7 @@
 
 from datetime import UTC
 from hashlib import sha256
+from io import BytesIO
 from threading import RLock
 
 from features import Evidence, extract_evidence
@@ -70,8 +71,10 @@ class GraphDetector:
         # Inference must use the reviewed checkpoint; never silently score with
         # random weights or retrain on demo data during service startup.
         weights_path = Path(__file__).resolve().parent / "tgnn_weights.pt"
+        checkpoint_bytes = weights_path.read_bytes()
+        self.checkpoint_sha256 = sha256(checkpoint_bytes).hexdigest()
         self.tgnn.load_state_dict(
-            torch.load(weights_path, map_location="cpu", weights_only=True)
+            torch.load(BytesIO(checkpoint_bytes), map_location="cpu", weights_only=True)
         )
         self.tgnn.eval()
 

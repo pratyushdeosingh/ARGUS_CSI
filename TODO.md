@@ -1,126 +1,44 @@
-# ARGUS fintech TODO
+# ARGUS work checklist
 
-Working checklist for the team's Problem Statement #9 requirements. Check an
-item only after its acceptance criteria pass. Owners coordinate changes through
-reviewed PRs; do not independently change shared score contracts.
+The 29 October 2026 release integrates Yojit's dashboard/redesign with unified
+financial scoring and the investigation workflow. This checklist distinguishes
+assignment prototype delivery from work requiring real data or production
+infrastructure. Release evidence is in [docs/verification.md](docs/verification.md).
 
-## Working foundation
+## Delivered submission workflow
 
-- [x] Batch graph analysis with supplied behavioural baseline and rule evidence.
-- [x] TGNN checkpoint loading and corroboration guard for batch risk promotion.
-- [x] Specialist mule/scam scoring API and synthetic scenario demo.
-- [x] Durable single-payment ingestion with duplicate/conflict handling.
-- [x] Rolling graph scoring and transaction/score/alert/failure WebSocket events.
-- [x] React batch Data Lab, account graph and cross-domain case history.
-- [x] Simulated analyst approval and stored action audit trail.
-- [x] Automated unit/build/container/service checks in CI.
+- [x] Preserve Yojit's live monitoring layout, navigation, graphs and styling.
+- [x] Financial rules/TGNN/mule/scam `financial.v1` assessment and provenance.
+- [x] Financial-only batch/stream analysis cases with optional infrastructure.
+- [x] Connected financial stream evidence groups and persisted payment context.
+- [x] Live React ingestion, scored/alert/failure events and reconnect replay.
+- [x] Preserve per-payment unified score across supplementary event delivery.
+- [x] Investigation assignment/status/notes with optimistic revision checks.
+- [x] Draft JSON report export with transaction and assessment references.
+- [x] Immutable payment IDs and atomic simulated response approval/audit.
+- [x] Currency-separated API totals; no mixed-currency portfolio sum.
+- [x] Synthetic evaluation/training scripts, metrics and model/data fingerprints.
+- [x] Container startup, service/restart/outage checks in CI.
+- [x] Same-origin Docker API/WebSocket proxy and Vercel frontend configuration.
+- [x] Submission walkthrough, deployment instructions and documented limitations.
 
-## P0 — complete the financial fraud workflow
+## Remaining research and production work
 
-- [ ] **P0-1: Unify core and specialist scoring — all three; Pratyush coordinates.**
-  Define one versioned response containing transaction ID, 0–1 combined risk,
-  detector contributions, reasons, suspicious nodes/edges and model provenance.
-  Convert specialist 0–100 values once at the boundary. Batch and stream paths
-  must use the agreed fusion, including a documented policy for unsupported ML
-  predictions. Accept when the same controlled scenario reaches API, stored
-  result and UI with consistent scores and no hidden fixture substitution.
+- [ ] Approve a representative labelled dataset/licence and perform independent
+  leakage-controlled real-data evaluation, calibration and segment analysis.
+- [ ] Validate model attribution beyond the bounded node-feature ablation diagnostic.
+- [ ] Add time/currency-aware cycles, suspicious communities and centrality-based
+  investigation with positive/negative graph counterexamples.
+- [ ] Add a persisted scoring job/retry worker. Stored event replay recovers
+  missed delivered scores/alerts; it does not automatically retry detector failures.
+- [ ] Introduce authenticated analyst roles and authorization for shared sensitive
+  deployments; current actor names are supplied by callers.
+- [ ] Add a broker/shared state for multiple core workers, bounded slow-client
+  handling and measured load/latency/resource tests.
+- [ ] Strengthen payroll/refund/merchant-vs-scam discrimination on real data.
+- [ ] Define production payment revision/cancellation semantics and external feed
+  integration; no real holds/freezes/cancellations exist in this prototype.
+- [ ] Expand mobile/browser/assistive-technology regression coverage.
+- [ ] Confirm the original course rubric and any video/report requirements.
 
-- [ ] **P0-2: Create financial-only cases — Pratyush.**
-  Persist a qualifying fraud case from batch or streamed payments without a
-  system signal. Keep infrastructure evidence optional. Accept when a mule
-  stream creates a case visible in history after restart, a clean control does
-  not create a high-risk case, repeat delivery does not duplicate cases/actions,
-  and approval preserves its audit trail.
-
-- [ ] **P0-3: Connect the live React workflow — Yojit.**
-  Subscribe to WebSocket received/scored/alert/failure events, display scores and
-  evidence, highlight affected accounts, and show disconnected/reconnecting
-  state. Accept when replay updates the screen without refresh, reconnect loads
-  persisted history, duplicate events do not duplicate rows and failures are
-  visible. Add browser-level tests; current frontend tests cover helpers/API
-  behaviour rather than complete rendered interaction.
-
-- [ ] **P0-4: Evaluate ML independently — Pratyush.**
-  Choose a dataset with documented provenance, licence and labels; separate
-  training, validation and held-out evaluation without customer/time leakage.
-  Publish precision, recall, F1, PR-AUC, false positives, thresholds and a rules
-  baseline, including performance by relevant payment segment. Accept when
-  results are reproducible from committed scripts and a model/data manifest.
-  Fixture training and scenario assertions do not satisfy this item.
-
-- [ ] **P0-5: Make scoring and alert delivery recoverable — Yojit + Pratyush.**
-  Store pending/scored/failed analysis status, durable alert IDs and retry state;
-  separate ingestion acknowledgement from scoring outcome. Define event/session
-  grouping explicitly rather than deriving production context from ID prefixes.
-  Accept when a detector outage followed by recovery scores each accepted
-  payment, missed alerts can be retrieved, and retries preserve idempotency.
-
-## P1 — complete the problem-statement capabilities
-
-- [ ] **P1-1: Advanced graph investigation — Pratham.**
-  Add time/currency-aware cycle detection, suspicious communities, centrality
-  features and coordinated mule-group output. Return nodes, edges, transaction
-  IDs and observable evidence. Validate positive and clean counterexamples,
-  including cancelled transfers and mixed currencies. Bound expensive graph
-  searches and document limits.
-
-- [ ] **P1-2: Validate dedicated scam detection — Yojit + Pratham.**
-  Define supported scam hypotheses and the data needed to distinguish them from
-  legitimate fan-out, payroll, refunds and merchant settlement. Add positive and
-  negative labelled scenarios. Accept when integrated scam evidence reaches a
-  financial case and false-positive examples are documented.
-
-- [ ] **P1-3: Investigation and draft reporting — Pratyush.**
-  Add assignment, investigation status, notes, evidence references and draft
-  suspicious activity report export. Retain reviewer identity and revision
-  history. Accept when a case can be investigated and exported with source
-  transaction references. Label output as a draft; do not claim regulatory
-  filing, jurisdictional compliance or automatic submission.
-
-- [ ] **P1-4: ML explanation and provenance — Pratyush + Pratham.**
-  Record model version, training-data reference, feature schema and explanation
-  method. Separate rule evidence from model attribution. Accept when a saved
-  score can be reproduced and its top model factors explained using an
-  appropriate tested attribution method. Node rankings alone are insufficient.
-
-- [ ] **P1-5: Preserve ledger and approval integrity — Pratyush.**
-  Define transaction revision rules across batch and stream ingestion. Batch
-  upserts currently can replace transaction data/session grouping, whereas
-  stream ingestion rejects conflicting IDs. Add atomic approval/audit writes and
-  concurrent-approval tests. Accept when conflicting inputs cannot silently
-  rewrite investigation history or execute duplicate simulated actions.
-
-- [ ] **P1-6: Bound and isolate scoring state — Pratham + Pratyush.**
-  Serialize the complete specialist scoring operation, define duplicate score
-  semantics and cancellation handling, persist or reconstruct history, and test
-  out-of-order and simultaneous payments. Individual history-method locks do
-  not make scoring atomic. Accept when restart/concurrent evaluation produces
-  documented, reproducible results within bounded memory.
-
-- [ ] **P1-7: Payment-value metrics — Pratyush + Yojit.**
-  Group totals by currency and distinguish payment counts from sums of money.
-  The current aggregate `total_value_observed` adds raw amounts across
-  currencies; do not present it as a converted portfolio value. Accept when INR
-  and USD controls remain separate in API and UI.
-
-## P2 — submission hardening
-
-- [ ] **P2-1: Runtime reliability — all three.** Add slow/disconnected WebSocket
-  client limits, request/window bounds, dependency pinning, load/latency tests,
-  and detector timeout/recovery coverage. Report measured results, not a claim
-  of production throughput.
-- [ ] **P2-2: Operator access — Pratyush + Yojit.** Add authentication,
-  investigation/approval roles and access-scoped APIs/events before any shared
-  deployment with sensitive data. Test denied actions and audit actor identity.
-- [ ] **P2-3: Fintech presentation — all three.** Verify the official rubric
-  against the team's supplied requirement list. Rehearse one clean payment,
-  one mule network and one scam investigation through the completed flow.
-  Show model evaluation and distinguish synthetic replay from live telemetry.
-- [ ] **P2-4: Final release evidence — all three.** Run the release checklist,
-  record CI revision and demo limitations, and update the README coverage table
-  only after the corresponding acceptance criteria pass.
-
-Recommended order: agree on P0-1's contract first; start P0-4's data/evaluation
-work in parallel; complete P0-2, P0-3 and P0-5 around the shared contract; then
-finish the P1 capabilities. Keep the optional infrastructure demo working while
-building the financial-only path.
+These unchecked items are explicit limits, not features claimed by the submission.
