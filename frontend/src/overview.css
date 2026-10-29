@@ -1,0 +1,248 @@
+/* Shared application materials, retaining the Phase 2/3 foundation.
+   Neutral black palette and bounded silver edge lighting.
+   Opaque first: translucency requires both filters and :has so the existing
+   Reduce Transparency control can cover every new surface without app state. */
+.m-app.m-experience {
+  --monitor-kpi: #242424;
+  --monitor-panel: #171717;
+  --monitor-control: #222222;
+  --monitor-reading: #0d0d0d;
+  --monitor-blur: none;
+  --monitor-halo: 0 0 0 transparent;
+  --monitor-edge: rgb(255 255 255 / 22%);
+  --monitor-divider: rgb(255 255 255 / 10%);
+  --monitor-shadow: inset 0 1px rgb(255 255 255 / 10%), 0 0 0 1px rgb(255 255 255 / 2%), 0 8px 24px rgb(0 0 0 / 35%);
+  background:
+    radial-gradient(ellipse 48% 420px at 12% 260px, rgb(180 180 180 / 13%), transparent 90%),
+    radial-gradient(ellipse 32% 520px at 90% 620px, rgb(150 150 150 / 12%), transparent 90%),
+    radial-gradient(ellipse 55% 450px at 34% 1080px, rgb(125 125 125 / 8%), transparent 90%),
+    #030303;
+}
+@supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  @supports selector(:has(*)) {
+    .m-app.m-experience {
+      --surface-glass: rgb(24 24 24 / 66%);
+      --monitor-kpi: rgb(28 28 28 / 64%);
+      --monitor-panel: rgb(20 20 20 / 74%);
+      --monitor-control: rgb(28 28 28 / 66%);
+      --monitor-reading: rgb(12 12 12 / 96%);
+      --monitor-blur: blur(16px);
+      --monitor-halo: 0 0 14px rgb(255 255 255 / 4%);
+    }
+  }
+}
+.m-app.m-experience:where(:has(.m-header[data-opaque="true"])) {
+  --monitor-kpi: #242424;
+  --monitor-panel: #171717;
+  --monitor-control: #222222;
+  --monitor-reading: #0d0d0d;
+  --monitor-blur: none;
+  --monitor-halo: 0 0 0 transparent;
+}
+.m-app.m-experience .m-heading { margin-bottom: 18px; }
+.m-app.m-experience .m-heading h1 { font-size: 23px; letter-spacing: -.7px; }
+.m-app.m-experience .m-heading p { color: var(--text-secondary); line-height: 1.6; }
+.m-app.m-experience .m-source,
+.m-app.m-experience .m-controls {
+  background: var(--monitor-control);
+  border-color: var(--monitor-edge);
+  box-shadow: var(--monitor-shadow);
+}
+/* Only navigation, the run toolbar and the shared KPI strip sample backdrops.
+   No per-card filters and no filtered ancestors around the live graph/table. */
+.m-app.m-experience .m-controls,
+.m-app.m-experience .m-kpis {
+  -webkit-backdrop-filter: var(--monitor-blur);
+  backdrop-filter: var(--monitor-blur);
+}
+.m-app.m-experience .m-controls { margin-bottom: 16px; }
+.m-app.m-experience .m-run-summary { font-size: 12px; }
+.m-app.m-experience .m-run-summary > span:last-child { color: var(--text-secondary); }
+.m-app.m-experience .m-panel {
+  background: var(--monitor-panel);
+  border-color: var(--monitor-edge);
+  box-shadow: var(--monitor-shadow);
+  border-radius: 13px;
+}
+.m-app.m-experience .m-kpis { gap: 12px; border-radius: 13px; margin-bottom: 18px; }
+.m-app.m-experience .m-kpis article {
+  background: linear-gradient(125deg, rgb(255 255 255 / 6%), transparent 65%), var(--monitor-kpi);
+  padding: 17px 16px 14px;
+  min-height: 157px;
+}
+.m-app.m-experience .m-kpis article > div:first-child { font-size: 12px; align-items: flex-start; }
+.m-app.m-experience .m-kpis article > div:first-child > svg { color: var(--text-secondary); flex-shrink: 0; }
+.m-app.m-experience .m-kpis strong { font-size: 29px; font-weight: 600; margin: 13px 0 8px; }
+.m-app.m-experience .m-kpis small { font-size: 11px; line-height: 1.55; }
+.m-app.m-experience .m-kpis article > small { color: var(--text-secondary); margin-top: 7px; }
+.m-app.m-experience .m-kpis article[data-health="healthy"] > strong,
+.m-app.m-experience .m-kpis article[data-health="healthy"] > div:first-child > svg { color: var(--status-healthy); }
+.m-app.m-experience .m-kpis .m-contribution-chart { top: 49px; right: 14px; width: 34%; }
+.m-app.m-experience .m-monitor-grid { grid-template-columns: minmax(0, 1.86fr) minmax(0, 1fr); gap: 16px; margin-bottom: 18px; }
+.m-app.m-experience .m-investigation-grid { grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 16px; }
+.m-app.m-experience .m-panel-title { padding: 16px; border-color: var(--monitor-divider); min-height: 76px; }
+.m-app.m-experience .m-panel-title h2 { font-size: 15px; font-weight: 600; letter-spacing: -.25px; }
+.m-app.m-experience .m-panel-title p { font-size: 11px; line-height: 1.5; color: var(--text-secondary); }
+.m-app.m-experience .m-count { color: var(--text-secondary); border-color: var(--monitor-edge); font-size: 10px; }
+.m-app.m-experience .m-pill { font-size: 11px; padding: 5px 8px; border-color: var(--monitor-edge); color: var(--text-primary); }
+.m-app.m-experience .m-filters { padding: 11px 12px; gap: 8px; }
+.m-app.m-experience .m-search { background: var(--monitor-reading); border-color: var(--monitor-edge); border-radius: 7px; }
+.m-app.m-experience .m-search input,
+.m-app.m-experience .m-filters select { font-size: 11px; min-height: 36px; }
+.m-app.m-experience .m-filters select { border-color: var(--monitor-edge); background: var(--monitor-reading); max-width: 148px; }
+.m-app.m-experience input::placeholder { color: var(--text-muted); }
+.m-app.m-experience .m-table-wrap { background: var(--monitor-reading); min-height: 244px; max-height: 405px; border-block: 1px solid var(--monitor-divider); }
+.m-app.m-experience th { padding: 11px 10px; background: #202020; border-color: var(--monitor-divider); font-size: 11px; color: var(--text-secondary); }
+.m-app.m-experience td { padding: 9px 10px; height: 54px; border-color: var(--monitor-divider); color: var(--text-primary); font-size: 12px; }
+.m-app.m-experience td small { color: var(--text-secondary); font-size: 11px; margin-top: 4px; }
+.m-app.m-experience td:nth-child(4), .m-app.m-experience th:nth-child(4) { text-align: right; }
+.m-app.m-experience td:nth-child(6), .m-app.m-experience td:nth-child(7) { text-align: center; }
+.m-app.m-experience .m-risk-value { display: inline-block; min-width: 52px; padding: 4px 5px; border-radius: 5px; background: var(--status-healthy-soft); color: var(--status-healthy); font-size: 11px; }
+.m-app.m-experience td.warning .m-risk-value { background: var(--status-warning-soft); color: var(--status-warning); }
+.m-app.m-experience td.danger .m-risk-value { background: var(--status-danger-soft); color: var(--status-danger); }
+.m-app.m-experience td:not(.healthy):not(.warning):not(.danger) .m-risk-value { color: var(--text-muted); background: #242424; }
+.m-app.m-experience tbody tr:hover { background: #252525; }
+.m-app.m-experience tbody tr.selected { background: #2d2d2d; box-shadow: inset 3px 0 #d6d6d6; }
+.m-app.m-experience .m-status { border: 1px solid var(--monitor-edge); padding: 3px 6px; font-size: 10px; }
+.m-app.m-experience .m-status.completed { border-color: var(--status-healthy-border); }
+.m-app.m-experience .m-status.pending { border-color: var(--status-warning-border); }
+.m-app.m-experience .m-status.cancelled { border-color: var(--status-danger-border); }
+.m-app.m-experience .m-table-footer { min-height: 52px; border-color: var(--monitor-divider); font-size: 11px; color: var(--text-secondary); padding: 9px 12px; }
+.m-app.m-experience .m-table-footer button { min-height: 32px; font-size: 11px; padding: 5px 9px; }
+.m-app.m-experience .m-alerts { max-height: 597px; }
+.m-app.m-experience .m-alert-list { max-height: 466px; background: var(--monitor-reading); }
+.m-app.m-experience .m-alert { padding: 14px 13px; gap: 10px; border-color: var(--monitor-divider); position: relative; }
+.m-app.m-experience .m-alert-severity { flex: 0 0 57px; text-transform: capitalize; font-size: 10px; font-weight: 600; padding: 5px 6px; text-align: center; border: 1px solid var(--status-warning-border); border-radius: 6px; color: var(--status-warning); background: var(--status-warning-soft); line-height: 1.3; }
+.m-app.m-experience .m-alert-severity.critical,
+.m-app.m-experience .m-alert-severity.high { color: var(--status-danger); background: var(--status-danger-soft); border-color: var(--status-danger-border); }
+.m-app.m-experience .m-alert-severity.low { color: var(--status-healthy); background: var(--status-healthy-soft); border-color: var(--status-healthy-border); }
+.m-app.m-experience .m-alert strong { display: block; font-size: 12px; font-weight: 600; line-height: 1.45; color: var(--text-primary); }
+.m-app.m-experience .m-alert small { font-size: 11px; color: var(--text-secondary); line-height: 1.55; margin-top: 4px; }
+.m-app.m-experience .m-alert p { font-size: 12px; line-height: 1.55; color: var(--text-secondary); margin: 5px 0; }
+.m-app.m-experience .m-alert small:not(.m-mono) { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.m-app.m-experience .m-alert time { font-size: 10px; color: var(--text-muted); margin-top: 7px; }
+.m-app.m-experience .m-alert:hover { background: #252525; }
+.m-app.m-experience .m-alert.active { background: #2d2d2d; box-shadow: inset 3px 0 #d6d6d6; }
+.m-app.m-experience .m-all-alerts { font-size: 11px; min-height: 43px; border-color: var(--monitor-divider); }
+.m-app.m-experience .m-empty { padding: 32px 20px; min-height: 226px; justify-content: center; color: var(--text-muted); }
+.m-app.m-experience .m-empty h3 { font-size: 13px; color: var(--text-primary); }
+.m-app.m-experience .m-empty p { font-size: 12px; color: var(--text-secondary); line-height: 1.65; }
+.m-app.m-experience .m-graph { margin: 10px; border: 1px solid var(--monitor-edge); border-radius: 9px; overflow: hidden; background-color: #0b0b0b; }
+.m-app.m-experience .m-canvas { height: 390px; background: transparent; }
+.m-app.m-experience .m-graph-tools { top: 10px; right: 10px; gap: 5px; }
+.m-app.m-experience .m-graph-tools button { min-width: 34px; min-height: 34px; font-size: 12px; background: var(--monitor-control); border-color: #555555; box-shadow: 0 3px 8px rgb(0 0 0 / 24%); }
+.m-app.m-experience .m-graph-empty { color: var(--text-secondary); font-size: 12px; padding: 0 20px; }
+.m-app.m-experience .m-legend { font-size: 11px; color: var(--text-secondary); flex-shrink: 0; }
+.m-app.m-experience .m-network-footer { font-size: 10px; line-height: 1.5; color: var(--text-secondary); border-color: var(--monitor-divider); padding: 10px 14px; flex-wrap: wrap; }
+@media (min-width: 1120px) {
+  .m-app.m-experience .m-details { max-height: 650px; overflow: auto; overscroll-behavior: contain; }
+  .m-app.m-experience .m-details > .m-panel-title { position: sticky; top: 0; z-index: 2; background: #202020; }
+}
+.m-app.m-experience .m-detail-amount { font-size: 26px; font-weight: 600; margin: 16px; }
+.m-app.m-experience .m-transfer,
+.m-app.m-experience .m-details dl,
+.m-app.m-experience .m-account,
+.m-app.m-experience .m-scores > div,
+.m-app.m-experience .m-details > .m-evidence,
+.m-app.m-experience .m-related { background: var(--monitor-reading); border: 1px solid var(--monitor-divider); border-radius: 8px; }
+.m-app.m-experience .m-transfer { margin: 16px; padding: 12px; gap: 12px; }
+.m-app.m-experience .m-transfer span,
+.m-app.m-experience .m-transfer strong { font-size: 11px; color: var(--text-secondary); }
+.m-app.m-experience .m-transfer strong { color: var(--text-primary); }
+.m-app.m-experience .m-details dl { padding: 13px; margin: 16px; grid-template-columns: 118px minmax(0,1fr); gap: 10px 12px; font-size: 11px; line-height: 1.5; }
+.m-app.m-experience .m-details dt { color: var(--text-secondary); }
+.m-app.m-experience .m-details dd { color: var(--text-primary); }
+.m-app.m-experience .m-scores { margin: 16px; gap: 8px; }
+.m-app.m-experience .m-scores > div { padding: 11px; }
+.m-app.m-experience .m-scores span { color: var(--text-secondary); font-size: 11px; }
+.m-app.m-experience .m-scores strong { font-size: 18px; margin: 9px 0; }
+.m-app.m-experience .m-scores i { height: 4px; border-radius: 3px; background: #353535; overflow: hidden; }
+.m-app.m-experience .m-scores b { height: 4px; background: var(--text-muted); }
+.m-app.m-experience .m-scores strong.danger + i b { background: var(--status-danger); }
+.m-app.m-experience .m-scores strong.warning + i b { background: var(--status-warning); }
+.m-app.m-experience .m-scores strong.healthy + i b { background: var(--status-healthy); }
+.m-app.m-experience .m-details .m-score-note { font-size: 11px; color: var(--text-secondary); line-height: 1.7; margin: 0 16px 16px; }
+.m-app.m-experience .m-details > h3 { font-size: 12px; margin: 18px 16px 10px; }
+.m-app.m-experience .m-details > .m-muted { font-size: 11px; line-height: 1.7; color: var(--text-secondary); margin: 12px 16px; }
+.m-app.m-experience .m-evidence { font-size: 12px; line-height: 1.7; color: var(--text-secondary); max-height: 240px; }
+.m-app.m-experience .m-details > .m-evidence { margin: 0 16px; padding: 12px 16px 5px 30px; }
+.m-app.m-experience .m-account { margin: 16px; padding: 13px; }
+.m-app.m-experience .m-account h3 { font-size: 12px; color: var(--text-primary); overflow-wrap: anywhere; }
+.m-app.m-experience .m-account p { font-size: 11px; line-height: 1.65; color: var(--text-secondary); }
+.m-app.m-experience .m-account .m-evidence { padding: 12px 0 0 17px; }
+.m-app.m-experience .m-account button { margin-top: 9px; min-height: 36px; font-size: 11px; }
+.m-app.m-experience .m-related { margin: 0 16px 16px; overflow: hidden; }
+.m-app.m-experience .m-related button { min-height: 40px; padding: 10px; font-size: 11px; border-color: var(--monitor-divider); }
+.m-app.m-experience button,
+.m-app.m-experience select,
+.m-app.m-experience .m-search { transition: background-color var(--motion-fast), border-color var(--motion-fast), box-shadow var(--motion-fast); }
+.m-app.m-experience button:active:not(:disabled) { box-shadow: inset 0 1px 4px rgb(0 0 0 / 25%); }
+.m-app.m-experience :is(button,input,select,[tabindex]):focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 3px; }
+.m-app.m-experience .m-footer { font-size: 10px; color: var(--text-secondary); line-height: 1.6; }
+@media (min-width: 1600px) {
+  .m-app.m-experience .m-canvas { height: 420px; }
+  .m-app.m-experience td, .m-app.m-experience th { padding-inline: 13px; }
+}
+@media (max-width: 1119px) {
+  .m-app.m-experience .m-kpis { grid-template-columns: repeat(3,minmax(0,1fr)); }
+  .m-app.m-experience .m-monitor-grid,
+  .m-app.m-experience .m-investigation-grid { grid-template-columns: minmax(0,1fr); }
+  .m-app.m-experience .m-alert-list { max-height: 360px; }
+  .m-app.m-experience .m-alerts { max-height: 490px; }
+}
+@media (max-width: 650px) {
+  .m-app.m-experience .m-heading h1 { font-size: 22px; }
+  .m-app.m-experience .m-kpis { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 9px; }
+  .m-app.m-experience .m-kpis article { padding: 13px 12px; min-height: 165px; }
+  .m-app.m-experience .m-kpis article > div:first-child { font-size: 11px; gap: 4px; min-height: 31px; }
+  .m-app.m-experience .m-kpis strong { font-size: 26px; margin-top: 8px; }
+  .m-app.m-experience .m-kpis .m-contribution-chart { width: 34%; right: 10px; top: 52px; }
+  .m-app.m-experience .m-kpis article:last-child { grid-column: 1 / -1; min-height: 114px; }
+  .m-app.m-experience .m-kpis article:last-child > div:first-child { min-height: auto; }
+  .m-app.m-experience .m-panel-title { padding: 14px; flex-wrap: wrap; }
+  .m-app.m-experience .m-filters { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .m-app.m-experience .m-search { grid-column: 1/-1; }
+  .m-app.m-experience .m-filters select { width: 100%; max-width: none; }
+  .m-app.m-experience .m-search input,
+  .m-app.m-experience .m-filters select,
+  .m-app.m-experience .m-table-footer button,
+  .m-app.m-experience .m-graph-tools button,
+  .m-app.m-experience .m-account button { min-height: 44px; }
+  .m-app.m-experience .m-graph-tools button { min-width: 44px; }
+  .m-app.m-experience .m-canvas { height: 340px; }
+  .m-app.m-experience .m-graph { margin: 8px; }
+  .m-app.m-experience .m-transfer strong { max-width: 75%; text-align: right; }
+  .m-app.m-experience .m-scores strong { font-size: 16px; }
+  .m-app.m-experience .m-scores > div { padding: 9px; }
+  .m-app.m-experience .m-alert-severity { flex-basis: 53px; }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .m-app.m-experience {
+    --monitor-kpi: #242424;
+    --monitor-panel: #171717;
+    --monitor-control: #222222;
+    --monitor-reading: #0d0d0d;
+    --monitor-blur: none;
+  --monitor-halo: 0 0 0 transparent;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .m-app.m-experience *, .m-app.m-experience *::before, .m-app.m-experience *::after { transition: none !important; animation: none !important; }
+}
+@media (forced-colors: active) {
+  .m-app.m-experience {
+    --surface-glass: Canvas;
+    --monitor-kpi: Canvas;
+    --monitor-panel: Canvas;
+    --monitor-control: Canvas;
+    --monitor-reading: Canvas;
+    --monitor-edge: ButtonText;
+    --monitor-divider: ButtonText;
+    --monitor-blur: none;
+  --monitor-halo: 0 0 0 transparent;
+    background: Canvas;
+  }
+  .m-app.m-experience .m-kpis article, .m-app.m-experience .m-panel, .m-app.m-experience .m-controls, .m-app.m-experience .m-source { box-shadow: none; background-image: none; }
+  .m-app.m-experience :is(.m-details > .m-panel-title,th,.m-alert-severity,.m-risk-value,.m-graph,.m-graph-tools button) { background: Canvas !important; color: CanvasText !important; border-color: ButtonText; }
+  .m-app.m-experience tbody tr.selected, .m-app.m-experience .m-alert.active { outline: 2px solid Highlight; box-shadow: none; }
+}

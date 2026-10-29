@@ -18,6 +18,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .config import Settings, get_settings
 from .correlation import correlate
+from .financial_cases import financial_finding
 from .detectors import DetectorGateway, DetectorUnavailable, get_detector_gateway
 from .models import (
     AuditEvent,
@@ -25,6 +26,7 @@ from .models import (
     AnalysisResponse,
     CorrelationRequest,
     DetectorStatus,
+    FinancialInvestigation,
     Incident,
     IncidentStatus,
     IngestionStatus,
@@ -164,6 +166,7 @@ async def ingest_transaction(
         default=None,
         description="Optional session or run ID for isolating demonstration scenarios",
     ),
+    scenario_id: str | None = Query(default=None, pattern="^(normal|mule|takeover|fanout|velocity|mixed|random)$"),
     x_session_id: str | None = Header(default=None, alias="X-Session-ID"),
     store: ArgusStore = Depends(get_argus_store),
     gateway: DetectorGateway = Depends(get_detector_gateway),
@@ -206,6 +209,12 @@ async def ingest_transaction(
 
     response.status_code = status.HTTP_201_CREATED
 
+    async def emit(event: dict) -> None:
+        # Session metadata is transport provenance, never a payment lifecycle field.
+        event["session_id"] = effective_batch
+        await asyncio.to_thread(store.save_stream_event, effective_batch, event)
+        await ws_manager.broadcast(event)
+
     # 1. Broadcast transaction.received
     received_event = create_stream_event(
         event_type="transaction.received",
@@ -213,10 +222,12 @@ async def ingest_transaction(
         data=transaction.model_dump(mode="json"),
     )
     try:
-        await ws_manager.broadcast(received_event)
+        await emit(received_event)
     except Exception as err:
         logger.warning(f"Failed to broadcast transaction.received: {err}")
 
+    graph_signal = None
+    score_resp = None
     # 2. Contextual rolling graph fraud analysis
     try:
         window_txs = await asyncio.to_thread(
@@ -244,7 +255,7 @@ async def ingest_transaction(
             },
         )
         try:
-            await ws_manager.broadcast(scored_event)
+            await emit(scored_event)
         except Exception as err:
             logger.warning(f"Failed to broadcast transaction.scored: {err}")
 
@@ -270,7 +281,7 @@ async def ingest_transaction(
                 },
             )
             try:
-                await ws_manager.broadcast(alert_event)
+                await emit(alert_event)
             except Exception as err:
                 logger.warning(f"Failed to broadcast alert.created: {err}")
 
@@ -287,7 +298,7 @@ async def ingest_transaction(
             },
         )
         try:
-            await ws_manager.broadcast(fail_event)
+            await emit(fail_event)
         except Exception as err:
             logger.warning(f"Failed to broadcast transaction.analysis_failed: {err}")
 
@@ -325,7 +336,7 @@ async def ingest_transaction(
             },
         )
         try:
-            await ws_manager.broadcast(scam_scored_event)
+            await emit(scam_scored_event)
         except Exception as err:
             logger.warning(f"Failed to broadcast transaction.scam_scored: {err}")
 
@@ -356,7 +367,7 @@ async def ingest_transaction(
                 },
             )
             try:
-                await ws_manager.broadcast(scam_alert_event)
+                await emit(scam_alert_event)
             except Exception as err:
                 logger.warning(f"Failed to broadcast scam_alert.created: {err}")
 
@@ -373,9 +384,19 @@ async def ingest_transaction(
             },
         )
         try:
-            await ws_manager.broadcast(fail_event)
+            await emit(fail_event)
         except Exception as err:
             logger.warning(f"Failed to broadcast transaction.scam_scoring_failed: {err}")
+
+    # Financial investigations have their own admission policy; no fake host signal.
+    try:
+        finding = financial_finding(transaction, graph_signal, score_resp, settings)
+        if finding:
+            case, changed = await asyncio.to_thread(store.record_financial_finding, effective_batch, scenario_id, finding)
+            if case and changed:
+                await emit(create_stream_event("investigation.updated", {"case_id": case.case_id}))
+    except Exception:
+        logger.exception("Financial investigation persistence failed for %s", transaction.transaction_id)
 
     return TransactionIngestionResponse(
         status=result,
@@ -397,9 +418,20 @@ async def ingest_transaction(
 def list_transactions(
     limit: int = Query(default=50, ge=1, le=200, description="Maximum number of transactions to return"),
     offset: int = Query(default=0, ge=0, description="Pagination offset"),
+    session_id: str | None = Query(default=None, max_length=160),
     store: ArgusStore = Depends(get_argus_store),
 ) -> list[Transaction]:
-    return store.list_transactions(limit=limit, offset=offset)
+    return store.list_transactions(limit=limit, offset=offset, session_id=session_id)
+
+
+@app.get("/api/transaction-events")
+def list_transaction_events(
+    session_id: str = Query(min_length=1, max_length=160),
+    limit: int = Query(default=2000, ge=1, le=5000),
+    store: ArgusStore = Depends(get_argus_store),
+) -> list[dict]:
+    """Bounded session replay for detector results missed during a disconnect."""
+    return store.list_stream_events(session_id, limit)
 
 
 @app.get(
@@ -500,6 +532,45 @@ def get_incident(
     if incident is None:
         raise HTTPException(status_code=404, detail="Incident not found")
     return incident
+
+
+@app.get("/api/incidents/{incident_id}/context")
+def incident_context(incident_id: str, store: ArgusStore = Depends(get_argus_store)) -> dict:
+    context = store.incident_context(incident_id)
+    if context is None:
+        raise HTTPException(status_code=404, detail="Incident not found")
+    return context
+
+
+@app.get("/api/financial-investigations", response_model=list[FinancialInvestigation])
+def financial_investigations(
+    limit: int = Query(default=50, ge=1, le=200),
+    session_id: str | None = Query(default=None, max_length=160),
+    store: ArgusStore = Depends(get_argus_store),
+) -> list[FinancialInvestigation]:
+    return store.list_financial_investigations(limit, session_id)
+
+
+@app.get("/api/financial-investigations/{case_id}", response_model=FinancialInvestigation)
+def financial_investigation(case_id: str, store: ArgusStore = Depends(get_argus_store)) -> FinancialInvestigation:
+    case = store.get_financial_investigation(case_id)
+    if case is None:
+        raise HTTPException(status_code=404, detail="Financial investigation not found")
+    return case
+
+
+@app.get("/api/financial-investigations/{case_id}/context")
+def financial_investigation_context(case_id: str, store: ArgusStore = Depends(get_argus_store)) -> dict:
+    case = financial_investigation(case_id, store)
+    return store.investigation_context(case.session_id, case.transaction_ids[-200:])
+
+
+@app.get("/api/transactions/{transaction_id}/context")
+def transaction_context(transaction_id: str, store: ArgusStore = Depends(get_argus_store)) -> dict:
+    context = store.transaction_context(transaction_id)
+    if context is None:
+        raise HTTPException(status_code=404, detail="Transaction not found; alert evidence remains available")
+    return context
 
 
 @app.get("/api/platform/metrics", response_model=PlatformMetrics)

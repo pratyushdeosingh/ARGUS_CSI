@@ -48,7 +48,9 @@ export function approveIncident(incidentId: string): Promise<ApprovalResponse> {
   });
 }
 
-export function analyzeData(payload: AnalysisRequest): Promise<AnalysisResponse> {
+export function analyzeData(
+  payload: AnalysisRequest,
+): Promise<AnalysisResponse> {
   return request<AnalysisResponse>("/api/analyze", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -65,5 +67,70 @@ export function loadIncidents(limit = 20): Promise<Incident[]> {
 }
 
 export function loadAuditEvents(incidentId: string): Promise<AuditEvent[]> {
-  return request<AuditEvent[]>(`/api/audit?incident_id=${encodeURIComponent(incidentId)}`);
+  return request<AuditEvent[]>(
+    `/api/audit?incident_id=${encodeURIComponent(incidentId)}`,
+  );
+}
+
+export const apiBase = API_BASE;
+export interface TransactionSource {
+  history(session: string): Promise<import("./types").Transaction[]>;
+  events(session: string): Promise<import("./monitoring").StreamEvent[]>;
+  ingest(
+    transaction: import("./types").Transaction,
+    session: string,
+    signal?: AbortSignal,
+    scenario?: string,
+  ): Promise<{ transaction: import("./types").Transaction }>;
+}
+export const syntheticSource: TransactionSource = {
+  async history(session: string) {
+    return request<import("./types").Transaction[]>(
+      `/api/transactions?limit=200&session_id=${encodeURIComponent(session)}`,
+    );
+  },
+  async events(session: string) {
+    return request<import("./monitoring").StreamEvent[]>(
+      `/api/transaction-events?session_id=${encodeURIComponent(session)}`,
+    );
+  },
+  async ingest(
+    transaction: import("./types").Transaction,
+    session: string,
+    signal?: AbortSignal,
+    scenario?: string,
+  ) {
+    return request<{ transaction: import("./types").Transaction }>(
+      `/api/transactions?session_id=${encodeURIComponent(session)}${scenario ? `&scenario_id=${encodeURIComponent(scenario)}` : ""}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(transaction),
+        signal,
+      },
+    );
+  },
+};
+
+export function loadFinancialInvestigations(): Promise<
+  import("./types").FinancialInvestigation[]
+> {
+  return request("/api/financial-investigations?limit=50");
+}
+export function loadTransactionContext(
+  id: string,
+): Promise<import("./types").InvestigationContext> {
+  return request(`/api/transactions/${encodeURIComponent(id)}/context`);
+}
+export function loadFinancialContext(
+  id: string,
+): Promise<import("./types").InvestigationContext> {
+  return request(
+    `/api/financial-investigations/${encodeURIComponent(id)}/context`,
+  );
+}
+export function loadIncidentContext(
+  id: string,
+): Promise<import("./types").InvestigationContext> {
+  return request(`/api/incidents/${encodeURIComponent(id)}/context`);
 }
