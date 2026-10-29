@@ -26,10 +26,13 @@ def test_saved_financial_context_uses_all_case_payments_without_host_signal(tmp_
     case = financial_incident(assessment)
     store.save_transactions("context-session", txs)
     store.save_signal(signal)
+    store.save_assessment(assessment)
     store.save_incident(case)
     context = store.incident_context(case.incident_id)
     assert {item["transaction_id"] for item in context["transactions"]} == {tx.transaction_id for tx in txs}
     assert len(context["events"]) == len(txs)
+    assert context["events"][0]["data"]["financial_assessment"]["assessment_id"] == assessment.assessment_id
+    assert context["events"][0]["data"]["incident_id"] == case.incident_id
 
 
 def test_financial_case_without_infrastructure_and_clean_control():

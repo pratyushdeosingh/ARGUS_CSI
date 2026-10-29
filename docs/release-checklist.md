@@ -13,13 +13,14 @@ See [submission guide](fintech-submission.md) and [verification](verification.md
 - [x] Reproducible independent synthetic evaluation; no real-data accuracy claim.
 - [x] Browser financial-only Lab analysis and saved assignment/status/note.
 - [x] Nested investigation Escape returns to the still-open accessible Lab.
+- [x] Saved analysis contexts retain payment contributions and complete labels.
 - [x] Deployment configuration and same-origin proxy smoke added to CI.
 
 ## Final remote gate
 
 - [ ] Integrated PR has no unresolved Git conflicts and exact-head CI passes.
-- [ ] CI container build/startup and dashboard HTTP/WebSocket proxy pass.
-- [ ] Restart persistence and detector outage checks pass.
+- [x] CI container build/startup and dashboard HTTP/WebSocket proxy pass.
+- [x] Restart persistence and detector outage checks pass.
 - [ ] Merge release and confirm main CI passes.
 
 ## Submission and runtime boundaries

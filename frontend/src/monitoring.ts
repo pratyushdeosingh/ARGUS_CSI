@@ -175,6 +175,8 @@ export function applyEvent(
 }
 export function detectionLabel(d?: Detection): string {
   if (!d) return "Not analyzed";
+  if (d.financial)
+    return d.financial.risk_score >= .40 ? "Flagged" : "Cleared by analysis";
   if (
     ((d.graph ?? 0) >= 70 && d.graphFlagged === true) ||
     (d.scam ?? 0) >= 70 ||

@@ -49,6 +49,10 @@ it("retains the selected payment's unified score across specialist delivery and 
   expect(applyEvent(state, unified)).toBe(state);
   const reversed = applyEvent(applyEvent(emptyMonitor(), specialist), unified);
   expect(reversed.detections.tx.combined).toBe(82);
+  expect(detectionLabel(reversed.detections.tx)).toBe("Flagged");
+  const clean = applyEvent(emptyMonitor(), event("transaction.scored", { transaction_id: "tx", risk_score: .99,
+    suspicious_transactions: ["tx"], financial_assessment: { transaction_scores: [{ ...payment, risk_score: .1 }] } }, "clean"));
+  expect(detectionLabel(clean.detections.tx)).toBe("Cleared by analysis");
 });
 describe("synthetic provider and scenario library", () => {
   it("keeps real data unavailable and synthetic mode operational", () => {

@@ -25,8 +25,24 @@ The integration adds a Docker same-origin Nginx API/WebSocket proxy, configurabl
 frontend CORS origins and Vercel static frontend settings. CI verifies actual
 container startup and the proxy boundary; Docker is unavailable locally.
 
-Final remote CI, restart/outage results and the release revision are recorded
-below when the release gate completes. Test databases/logs remain under ignored
+## Release gate
+
+Integrated revision `a9e116c` passed [Linux CI](https://github.com/pratyushdeosingh/ARGUS_CSI/actions/runs/40830849844):
+Python/frontend tests, production build, synthetic evaluation, all four container
+builds/startup, real HTTP/WebSocket integration, the Docker same-origin proxy,
+backend restart persistence and detector outage handling. Local restart and
+outage checks also passed against the isolated demo database.
+
+Final saved-case inspection added assessment replay so reopening an analysis case
+retains the original per-payment contributions and does not wait forever for
+supplementary live scoring. A regression verifies score precedence, stored
+assessment identity and below-threshold labels. The release PR's exact-head CI
+must pass after this correction before merging:
+[PR #7 checks](https://github.com/pratyushdeosingh/ARGUS_CSI/pull/7/checks).
+The final main-branch gate is available in
+[main CI](https://github.com/pratyushdeosingh/ARGUS_CSI/actions?query=branch%3Amain).
+
+Test databases/logs remain under ignored
 `artifacts/submission-20261029/`; existing user runtime data was not overwritten.
 The official rubric, real-data evaluation and production readiness remain outside
 the verified scope. See the current README/TODO for the delivered workflow and

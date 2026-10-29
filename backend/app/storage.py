@@ -667,6 +667,7 @@ class ArgusStore:
         case = self.get_incident(incident_id)
         if case is None:
             return None
+        assessment = self.get_assessment(case.financial_assessment_id) if case.financial_assessment_id else None
         with self._lock, self._connect() as connection:
             row = connection.execute("SELECT payload FROM detector_signals WHERE signal_id = ?", (case.financial_signal_id,)).fetchone()
             signal = GraphSignal.model_validate_json(row['payload']) if row else None
@@ -681,7 +682,9 @@ class ArgusStore:
             for tx in transactions:
                 events.append(dict(event_id=f"stored:{signal.signal_id}:{tx['transaction_id']}",
                                    event_type='transaction.scored', timestamp=signal.timestamp.isoformat(),
-                                   data={**signal.model_dump(mode='json'), 'transaction_id': tx['transaction_id']}))
+                                   data={**signal.model_dump(mode='json'), 'transaction_id': tx['transaction_id'],
+                                         'incident_id': case.incident_id,
+                                         'financial_assessment': assessment.model_dump(mode='json') if assessment else None}))
         return dict(session_id=f"historical:{incident_id}", transactions=transactions, events=events)
 
     def transaction_context(self, transaction_id: str) -> dict | None:
